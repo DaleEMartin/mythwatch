@@ -581,13 +581,31 @@ the in-app licences screen.
 
 | Fake | Behaviour |
 | --- | --- |
-| `FixtureTransport` | Maps method + path (+ optional query match) to a canned response; records every request; unmatched requests fail the test with the URL |
+| `FixtureTransport` | Maps method + path (+ optional query match) to a canned response or `BackendError`; records every request; an unmatched request throws `.unreachable` whose message includes the full URL (rules below) |
 | `FakeRecordingsService`, `FakePlaybackStateService`, `FakeMarkupService`, `FakeMediaLocator` | In-memory state, call log, per-call injectable error, optional suspension point to test in-flight behaviour |
 | `FakeBackendAdapter`, `FakeAdapterFactory` | Bundle of the fakes; configurable `supports` |
 | `FakePlayerEngine` | Records calls; `emit(_ snapshot:)` drives the stream; `seek` updates position immediately |
-| `TestClock` | `now` closure plus `advance(by:)` |
+| `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | as named |
 | `Recording.fixture(...)` | Builder with defaults for every field |
+| `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a `.json` file (extension optional in `named`) from a `Bundle` the caller passes (its own `Bundle.module`). A missing or unreadable file throws `FixtureError` whose description names the file |
+
+### `FixtureTransport` rules
+
+- It is a `final class` made `Sendable` by a `Mutex` (from `Synchronization`, available on every
+  declared platform), not an actor, so tests register stubs and read the log synchronously.
+  It cannot import `Testing`, so failure is a thrown error plus a record: an unmatched request
+  throws `BackendError.unreachable("FixtureTransport: no route for GET <full URL>")` and is
+  also kept in `unmatchedRequests`, so a test can assert it is empty even if production code
+  swallowed the error.
+- `requests` holds every request in arrival order, matched or not.
+- Stubs: `stub(_ method, path:, query:, response:)`, the same with `status:headers:body:` (String or
+  Data), and `stub(_ method, path:, query:, failure:)`.
+- A route matches when the method is equal, the path equals the request URL's path exactly, and
+  every `query` item is present in the request with an equal value. Extra request items are
+  allowed and order is ignored. An empty `query` matches any query string.
+- Several matches: the route with the most query items wins. On a tie the route registered first
+  wins.
 
 ## 9. Testing rules
 

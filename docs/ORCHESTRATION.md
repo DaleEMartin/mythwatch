@@ -12,8 +12,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M0-2 done and committed** (2026-11-14): `Mythwatch/Mythwatch.xcodeproj`, placeholder app,
   one UI launch test. Next task: **M0-3**, which needs the owner and a real Apple TV; do not
   launch it unattended. Milestone 1 can proceed alongside it.
-- **M1-1 done and committed** (2026-11-14): domain types, ports, `BackendError`. Next: **M1-2**,
-  then M1-3 and M1-4.
+- **M1-1 done and committed** (2026-11-14): domain types, ports, `BackendError`.
+- **M1-2 done and committed** (2026-11-14): HTTP transport types, `FixtureTransport`, `TestClock`,
+  `Recording.fixture`, `FixtureLoader`. Next: **M1-3**, then **M1-4** (run one at a time: agents
+  sharing this working tree break each other's builds; use worktree isolation to go parallel).
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not
