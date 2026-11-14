@@ -8,7 +8,14 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 
 - Spec complete: `docs/SPEC.md`, `docs/BACKEND-V35.md`, `docs/TASKS.md`, `CLAUDE.md`.
 - **M0-1 done and committed** (2026-11-14): git repo on `main`, `MythwatchKit` package skeleton,
-  `Tools/check-deps.sh`. Next task: **M0-2**.
+  `Tools/check-deps.sh`.
+- **M0-2 done and committed** (2026-11-14): `Mythwatch/Mythwatch.xcodeproj`, placeholder app,
+  one UI launch test. Next task: **M0-3**, which needs the owner and a real Apple TV; do not
+  launch it unattended. Milestone 1 can proceed alongside it.
+- The `xcodebuild` command in `CLAUDE.md` fails on this machine with "multiple devices matched":
+  two tvOS 26.5 simulators are both named "Apple TV". Use
+  `-destination 'platform=tvOS Simulator,id=727BE98D-D239-49FA-A432-4FEE8E5B40D6'` until the
+  owner decides whether to delete one simulator or change the command.
 - Nothing has been pushed anywhere. No GitHub repo exists; create one only when the owner asks.
 ## Roles the owner chose
 
