@@ -157,6 +157,17 @@ server-relative path such as `/Content/GetImageFile?StorageGroup=Coverart&FileNa
 Decode every DTO string as optional and every number with a default, so one odd row cannot fail
 the whole list. A row with no `Recording.RecordedId` or with `RecordedId <= 0` is skipped.
 
+Row rules implemented by the mapper (`RecordingMapper`, M1-6), chosen so that no data is invented:
+a row is **skipped** (the neighbours survive) when it has no `Recording` object or `RecordedId <= 0`,
+a null or empty `Title`, or any of `StartTime`, `EndTime`, `LastModified`, `Recording.StartTs`,
+`Recording.EndTs` that is missing or not `yyyy-MM-ddTHH:mm:ssZ`. An unparseable `Airdate` becomes
+nil (the row is kept). Missing `RecGroup` becomes `""`, missing `FileSize` 0. `Channel` becomes nil
+when it is null or has no `ChanNum`, `CallSign` and `ChannelName`; otherwise missing parts are `""`.
+`VideoPropNames` `4K` sets neither a resolution nor anything else (only `1080` and `720` are mapped).
+Scalar envelopes (`long`, `bool`, `String`) throw a decoding error when the value is missing or not
+convertible; unknown keys are ignored everywhere. Pairing commercial marks into breaks is left to
+the adapter (M1-7); the mapper layer only decodes the cut list.
+
 ### `GET /Dvr/GetRecorded?RecordedId=<id>` [live]
 
 Returns `{"Program": {...}}` with the same shape, always with `Channel`, `Recording`, `Artwork`
