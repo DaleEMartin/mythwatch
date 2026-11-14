@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MythwatchKit",
-    platforms: [.macOS(.v15), .tvOS("26.0")],
+    platforms: [.macOS(.v15), .tvOS("26.0"), .iOS("26.0")],
     products: [
         .library(name: "MythwatchDomain", targets: ["MythwatchDomain"]),
         .library(name: "MythwatchBackend", targets: ["MythwatchBackend"]),

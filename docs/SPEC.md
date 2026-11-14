@@ -24,10 +24,12 @@ requires it; when it does, update this file in the same commit.
 - Settings: backend address, connection test, playback and commercial-skip options.
 
 **Designed for, not built yet:** more backend versions, Live TV, the Videos library, backend
-login, Bonjour discovery of backends (built in the last milestone), an AVPlayer engine.
+login, Bonjour discovery of backends (built in the last milestone), an AVPlayer engine, an
+iPhone app (section 11).
 
 **Fixed decisions:** Swift 6 language mode with strict concurrency; SwiftUI; tvOS 26 deployment
-target; macOS 15 for package tests; Swift Testing (`import Testing`); VLCKit for playback; MIT
+target; macOS 15 for package tests; iOS 26 declared in the package so it stays buildable for
+the later iPhone app; Swift Testing (`import Testing`); VLCKit for playback; MIT
 licence; no code copied from MythTV.
 
 ## 2. Repository layout
@@ -598,3 +600,40 @@ the in-app licences screen.
 | AVPlayer for H.264/HEVC | Second `PlayerEngine`; `makeEngine` chooses by `VideoTraits` |
 | Cut lists | `MarkupService.cutList(for:)`; feed into `CommercialSkipper` as non-undoable ranges |
 | Top Shelf extension | Reads `Library.continueWatching` via an app group |
+| iPhone app | Second app over the same `MythwatchKit`; see section 11 |
+
+## 11. The later iPhone app
+
+The owner wants an iPhone version eventually. It is not built in the first release, but the
+first release must not make it harder. The intended shape: a second app (or a second
+destination of the same app target; decide when it is built) with its own SwiftUI views for
+touch, sharing all of `MythwatchKit` and the VLC engine.
+
+Rules that apply now:
+
+- **`MythwatchKit` stays platform-neutral.** `Package.swift` declares iOS 26 alongside tvOS 26.
+  No package target may import UIKit, TVUIKit or SwiftUI, or use an API marked unavailable on iOS.
+  Check with `xcodebuild -scheme MythwatchKit-Package -destination 'generic/platform=iOS' build`
+  (run from `MythwatchKit/`) whenever a task adds a new framework import to the package.
+- **View models describe intent, not the remote.** Names and state in `MythwatchFeatures` and
+  `MythwatchPlayback` must not assume the Siri Remote or the focus engine: `seek(to:)`,
+  `skipForward()`, "scrub preview / commit / cancel", not "swipe" or "click". Mapping inputs to
+  those calls (section 7, "Player controls") belongs to the tvOS views.
+- **The VLCKit choice must cover iOS.** The distribution picked in M0-3 must also ship an iOS
+  build of the same version with the same API, dynamically linked. A tvOS-only build is rejected.
+- **`VLCPlayerEngine` uses nothing tvOS-only.** It will be shared by both apps. When the iPhone
+  app is started it moves out of the tvOS app target into a place both apps can link (a small
+  package target that depends on VLCKit); until then it stays where section 7 puts it.
+
+Known work the iPhone app will add, none of it scheduled:
+
+- Touch layouts for every screen and touch player controls; compact-width versions of the shelves.
+- App lifecycle: iOS suspends a backgrounded app, so the player must pause (which saves the
+  position, section 5.2) when the scene leaves the foreground. tvOS has the same need less often.
+- Lock-screen and Control Centre controls: the same Now Playing and remote-command code as tvOS,
+  which should then move out of the tvOS views into shared code.
+- Away from home: `NSAllowsLocalNetworking` only permits plain HTTP to local addresses. The
+  phone app works on the home network or over a VPN into it; reaching a backend by a public
+  host name would need HTTPS in front of the backend and is out of scope until asked for.
+- Things phone users expect that VLCKit does not give for free: AirPlay video, Picture in
+  Picture, and downloads for offline viewing. Each is a separate decision when the app is planned.

@@ -15,7 +15,7 @@ Section references: `SPEC §n` is `docs/SPEC.md`; `V35` is `docs/BACKEND-V35.md`
 
 ### M0-1 Repository and package skeleton — Sonnet
 - `git init`; `.gitignore` (copy `../cable-82-tv/.gitignore`); `LICENSE` (MIT); `README.md` stub.
-- `MythwatchKit/Package.swift`: swift-tools-version 6.0, platforms `.macOS(.v15)`, `.tvOS("26.0")`,
+- `MythwatchKit/Package.swift`: swift-tools-version 6.0, platforms `.macOS(.v15)`, `.tvOS("26.0")`, `.iOS("26.0")`,
   the six targets and five test targets with exactly the dependencies in SPEC §2. Swift 6
   language mode.
 - One placeholder source file and one trivial passing test per target.
@@ -42,6 +42,10 @@ Throwaway code on a branch; the deliverable is `docs/VLCKIT.md` plus the pinned 
 - **Hard requirement:** the chosen build must be a dynamic framework embedded in the app bundle
   (SPEC §7, "VLCKit linking"). Confirm it with `file` / `otool -L` on the built app and record the
   output. Reject any candidate that only ships as a static library.
+- **iPhone coverage (SPEC §11):** the chosen distribution must also ship an iOS build of the same
+  version with the same API, also as a dynamic framework. Check that the binary has iOS device
+  and simulator slices and that a trivial iOS simulator target links and plays the same stream.
+  Record any API or option that differs between tvOS and iOS. Reject a tvOS-only candidate.
 - Confirm which licence the chosen binary is actually under: libVLC is LGPL, but some builds
   bundle GPL-only modules. Reject a build that includes GPL-only modules, or record exactly
   which ones and stop for the owner's decision.

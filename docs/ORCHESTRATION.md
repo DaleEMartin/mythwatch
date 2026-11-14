@@ -12,10 +12,13 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M0-2 done and committed** (2026-11-14): `Mythwatch/Mythwatch.xcodeproj`, placeholder app,
   one UI launch test. Next task: **M0-3**, which needs the owner and a real Apple TV; do not
   launch it unattended. Milestone 1 can proceed alongside it.
-- The `xcodebuild` command in `CLAUDE.md` fails on this machine with "multiple devices matched":
-  two tvOS 26.5 simulators are both named "Apple TV". Use
-  `-destination 'platform=tvOS Simulator,id=727BE98D-D239-49FA-A432-4FEE8E5B40D6'` until the
-  owner decides whether to delete one simulator or change the command.
+- The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
+- **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
+  apply now: the package declares iOS 26 and must stay platform-neutral, view models must not
+  assume the remote, and M0-3 must pick a VLCKit build that also covers iOS. When reviewing a
+  task that adds a framework import to the package, run the iOS build check in SPEC §11.
+- Confirmed by the owner 2026-11-14: bundle-id prefix `com.daleemartin` (the "e" is a middle
+  initial); the `NSLocalNetworkUsageDescription` wording in `Mythwatch/Info.plist`.
 - Nothing has been pushed anywhere. No GitHub repo exists; create one only when the owner asks.
 ## Roles the owner chose
 
@@ -66,7 +69,8 @@ Name Mythwatch; separate repo; Swift 6 + SwiftUI over the HTTP services API; VLC
 `PlayerEngine`, dynamically linked; v35 adapter only for now behind the version seam; open
 source, maybe App Store later; commercial auto-skip with undo as the default, with Skip-button
 and Off modes; shelves plus shows grid; write-back of resume position, watched, delete,
-bookmarks; TDD with fast, injected-fake tests; future room for Live TV and the Videos library.
+bookmarks; TDD with fast, injected-fake tests; future room for Live TV, the Videos library and
+an iPhone app.
 
 ## Defaults the planner chose, not yet confirmed by the owner
 
