@@ -30,7 +30,12 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   market), Schedules Direct ids and 2025 recording times; the owner has been asked whether to
   replace them. They are in local history from this commit on.
 - **M1-6 done and committed** (2026-11-14): v35 DTOs, lenient decoding, `RecordingMapper`. Row
-  rules (which rows are skipped) are in `BACKEND-V35.md`. Next: **M1-7**.
+  rules (which rows are skipped) are in `BACKEND-V35.md`.
+- **M1-7 done and committed** (2026-11-14): v35 read path and `V35AdapterFactory`. Every write
+  method is a stub that sends nothing and throws `.rejected` until M3-5 / M5-1, so no code in
+  the repo can POST to a backend yet; the adapter still advertises the write capabilities
+  (as `BACKEND-V35.md` lists them). Image widths are rounded up to 160/320/640/1280.
+  Next: **M1-8**, then **M1-9** (live, GET only), then the Milestone 1 status to the owner.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

@@ -80,7 +80,7 @@ stays and its value is `null`. [live] (`GetRecorded` takes none of these and alw
 `Cast`, `Channel` and `Artwork`.) [live] Every `Inc*` parameter defaults to true when absent.
 [source]
 
-Paging: request pages of 200 until `StartIndex + Count >= TotalAvailable`. All six paging
+Paging: request pages of 200 until `StartIndex + Count >= TotalAvailable`; the adapter also stops on a page with no programmes, even if the total says more, and a failing page fails the whole call. (`V35RecordingsService.defaultPageSize` is 200; tests inject a smaller one.) All six paging
 fields are always present; `StartIndex`, `Count` and `TotalAvailable` are JSON numbers,
 `Version` and `ProtoVer` strings. [live] `Count` in the reply is the number of programmes
 returned; `TotalAvailable` counts rows after filtering. Rows whose deletion is pending are
@@ -181,6 +181,8 @@ zeros, and **`"Recording": null`** and `"Artwork": null`. [live] The adapter mus
 
 ### `POST /Dvr/UpdateRecordedWatchedStatus` [source]
 
+**Not implemented until M3-5 / M5-1.** `V35RecordingsService.setWatched` sends no request and throws `BackendError.rejected("not implemented until M3-5 / M5-1")`. The same holds for every write below (`delete`, `setResumePosition`, `setBookmark`).
+
 Form fields `RecordedId`, `Watched=true|false`. Returns `{"bool": true}`; `false` when the
 recording does not exist → `BackendError.rejected`.
 
@@ -234,6 +236,8 @@ Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the star
   - an end with no open start: treat the start as 0 only if it is the first mark, otherwise drop it;
   - a trailing start with no end: drop it;
   - drop breaks shorter than 5 s; then pass through `CommercialSkipper.normalise`.
+  - "first mark" means the first mark 4 or 5 after sorting (mark 32 and entries without a mark or offset do not count); at equal offsets an end sorts before a start.
+  - `MythBackendV35` may not import `MythwatchPlayback`, so `V35MarkupService` applies an equivalent private normalise (sort, drop empty, merge overlapping **and touching** ranges). M4-1 must keep `CommercialSkipper.normalise` consistent with that.
 - `GET /Dvr/GetRecordedCutList` has the same shape (marks 1 = cut start, 0 = cut end). Not used in v1.
 - 304 of 307 recordings on the reference backend carry the `COMMFLAG` flag.
 
@@ -242,20 +246,25 @@ Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the star
 | Purpose | URL | Notes |
 | --- | --- | --- |
 | Stream | `/Content/GetRecording?RecordedId=<id>` | Honours `Range` (HTTP 206, `Accept-Ranges: bytes`), `Content-Type: video/mp2t`. [live] |
-| Artwork | `<ArtworkReference.locator>&Width=<w>` | `/Content/GetImageFile` scales. [live] A 680×1000 cover returned 214 KB unscaled and, with `Width=120`, a 119×176 JPEG of 4.8 KB: aspect kept, height derived, width may come out a pixel under the request. Scaled copies are JPEG at quality 60. **Side effect:** the first request for a size writes `<original>.<W>x<H>.jpg` next to the original on the backend and serves it from there afterwards [source], so `MediaLocator` must use a small fixed set of widths, not arbitrary view sizes. |
+| Artwork | `<ArtworkReference.locator>&Width=<w>` | `/Content/GetImageFile` scales. [live] A 680×1000 cover returned 214 KB unscaled and, with `Width=120`, a 119×176 JPEG of 4.8 KB: aspect kept, height derived, width may come out a pixel under the request. Scaled copies are JPEG at quality 60. **Side effect:** the first request for a size writes `<original>.<W>x<H>.jpg` next to the original on the backend and serves it from there afterwards [source], so `MediaLocator` must use a small fixed set of widths, not arbitrary view sizes. `V35MediaLocator` rounds a requested width up to one of **160, 320, 640, 1280** (the largest for anything bigger, the smallest for 0 or negative). |
 | Preview frame | `/Content/GetPreviewImage?RecordedId=<id>&Width=<w>` | 200 with an image. [live] Used when a recording has no poster. |
 
 All are resolved against `BackendConnection.baseURL`. Percent-encoding already present in a
-locator must be preserved, not double-encoded.
+locator must be preserved, not double-encoded. A locator that is not a server-relative path (no leading `/`, a leading `//`, whitespace or non-ASCII) gives no artwork URL.
 
 ## Discovery
 
 The backend advertises Bonjour service type `_mythbackend._tcp` (`mediaserver.cpp`). [source]
 The advertised port and TXT record contents are [verify] in task M5-2.
 
+## Errors in the adapter
+
+Every read goes through one helper (`V35Client`): `Accept: application/json`; HTTP 400 → `.rejected(<text of the HTML body, or "HTTP 400">)`; any other non-2xx → `.http(status, <text of the body or nil>)` (the 404 page gives `"404 Not Found"`); an undecodable or wrong-shaped 2xx body → `.malformedResponse`; transport errors pass through unchanged.
+
 ## Capabilities reported by the v35 adapter
 
 `.recordings`, `.resumePosition`, `.bookmarks`, `.commercialBreaks`, `.deleteRecording`.
+The adapter advertises `.deleteRecording` although `delete` is a stub until M3-5 (listed as the document says; see the status note on the write endpoints). `liveTV` and `videoLibrary` are nil.
 `supports(version)` is true for `major == 35` only.
 
 ## Known differences in later versions (for whoever writes the next adapter)

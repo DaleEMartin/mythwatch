@@ -121,8 +121,8 @@ getters, `V35MediaLocator`, `V35AdapterFactory`. Tests (all through `FixtureTran
 - factory: supports 35.x only; capabilities as listed in V35.
 
 ### M1-8 Conformance suite — Opus (after M1-7)
-`AdapterConformance` + `ConformanceScenario` (SPEC §9), run against the v35 adapter and against
-`FakeBackendAdapter` (which keeps the fake honest). Checks: list returns sorted-stable unique
+`AdapterConformance` + `ConformanceScenario` (SPEC §9), run against the v35 adapter. (M2-3 adds
+the run against `FakeBackendAdapter`, which keeps the fake honest; the fake does not exist yet.) Checks: list returns sorted-stable unique
 ids; `recording(id:)` of a listed id equals the listed value; unknown id → `.notFound`; breaks
 are sorted, non-overlapping, non-empty ranges; nil when no position; media URLs are absolute and
 under the connection's base URL; capabilities agree with which optional services are non-nil.
@@ -152,6 +152,7 @@ empty input → empty library.
 ### M2-3 Test support, part 2 — Sonnet ∥
 Service fakes, `FakeBackendAdapter`, `FakeAdapterFactory`, `InMemorySettingsStore`,
 `FakeBackendDiscovery` (SPEC §8). Tests for call logs, injected errors and suspension points.
+Also run the M1-8 conformance suite against `FakeBackendAdapter` from `MythwatchFeaturesTests`.
 
 ### M2-4 `UserMessage`, `AppModel`, connection flow — Opus (after M2-1, M2-3)
 SPEC §6.3. Tests: no backend configured → `.idle`; success → `.loaded` with info and adapter;
