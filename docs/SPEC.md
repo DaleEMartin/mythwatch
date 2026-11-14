@@ -203,6 +203,8 @@ public struct BackendVersion: Hashable, Sendable, Comparable {
     public let major: Int, minor: Int, raw: String
     public init?(parsing raw: String)   // "v35.0", "v35.0-12-gabcdef", "v37-Pre-676-g5474cf09b0" (minor 0)
 }
+// ==, hash and < use (major, minor) only; `raw` is kept for diagnostics and does not take part,
+// so "v35.0" == "v35.0-12-gabcdef".
 
 public struct BackendCapabilities: OptionSet, Sendable {
     static let recordings, resumePosition, bookmarks, commercialBreaks, deleteRecording,
@@ -248,7 +250,12 @@ public struct BackendConnector: Sendable {                      // probe + resol
 
 `BackendProbe` is the only version-neutral wire code in the app. It calls `GET /Myth/GetBackendInfo`
 with `Accept: application/json` and reads `BackendInfo.Build.Version` using a tolerant decoder
-that ignores every other field. `/Myth/GetHostName` is optional and its failure is not an error.
+that ignores every other field. `/Myth/GetHostName` is optional: any failure (transport error,
+non-2xx, unexpected body) gives `hostName == nil`, never an error. A non-2xx reply to
+`GetBackendInfo` throws `.http(status:message: nil)`; an undecodable body, a missing
+`Build.Version`, or a version string `BackendVersion` cannot parse throws `.malformedResponse`;
+transport errors pass through unchanged. `BackendConnector.connect` lets each step's error
+surface unchanged.
 
 ### HTTP transport
 

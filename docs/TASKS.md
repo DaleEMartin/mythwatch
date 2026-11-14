@@ -152,6 +152,9 @@ SPEC §6.3. Tests: no backend configured → `.idle`; success → `.loaded` with
 each `BackendError` case → a distinct, plain-language `UserMessage` (assert titles and `canRetry`);
 unsupported version message names the version; `connect()` called twice concurrently probes once;
 changing the address and reconnecting replaces the session.
+Note: `BackendConnector.connect` returns only the adapter, but `BackendSession` also needs the
+`BackendInfo` (host name). Do not probe twice to get it: change `connect` to return both (and
+update SPEC §4 and the M1-3 connector tests) as part of this task.
 
 ### M2-5 Library, Show, EpisodeDetail view models — Sonnet (after M2-2, M2-4)
 SPEC §6.4. Tests: load → loaded; failure → failed with retry; refresh keeps old content visible
