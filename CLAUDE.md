@@ -30,6 +30,7 @@ given one task): read `docs/ORCHESTRATION.md` first. It holds the project status
 ```
 cd MythwatchKit && swift test                      # all package tests; must stay under 10 s
 cd MythwatchKit && swift test --filter <Name>      # one suite or test
+Tools/check-deps.sh                                # dependency rule (SPEC §2); the build only warns
 MYTHWATCH_LIVE_BACKEND=http://host:6544 swift test --filter Live    # read-only live tests
 xcodebuild -project Mythwatch/Mythwatch.xcodeproj -scheme Mythwatch \
   -destination 'platform=tvOS Simulator,name=Apple TV' test          # app build + UI tests

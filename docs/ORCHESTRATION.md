@@ -10,9 +10,6 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M0-1 done and committed** (2026-11-14): git repo on `main`, `MythwatchKit` package skeleton,
   `Tools/check-deps.sh`. Next task: **M0-2**.
 - Nothing has been pushed anywhere. No GitHub repo exists; create one only when the owner asks.
-- `CLAUDE.md` "Commands" does not yet list `Tools/check-deps.sh`; the owner has been asked
-  whether to add it. Until then, name the script in each subagent prompt.
-
 ## Roles the owner chose
 
 - **Fable orchestrates and reviews; it does not write application code.** Implementation is done
