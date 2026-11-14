@@ -76,6 +76,11 @@ on any that the table does not allow. Run it with `swift test`; keep its table i
 | `MythwatchTestSupport` | all of the above except `MythBackendV35` |
 | App target | `MythwatchFeatures`, `MythBackendV35` (registration only), VLCKit |
 
+Each test target depends on the target it tests and may also depend on `MythwatchTestSupport`
+(and through it on the targets that one may use). `MythwatchTestSupport` has no test target of
+its own: tests of the fakes live in the test target of the layer the fake stands in for (for
+example `FixtureTransport` is tested in `MythwatchBackendTests`).
+
 `MythwatchFeatures` must not import `MythBackendV35`. Only the app's composition root names it.
 No target other than `MythBackendV35` may contain a v35 endpoint path or JSON key.
 
@@ -94,7 +99,12 @@ public struct RecordingFlags: OptionSet, Sendable, Hashable {
                recordingInProgress, deletePending, damaged
 }
 
-public struct CalendarDay: Hashable, Sendable, Comparable { year, month, day }   // original air date
+public struct CalendarDay: Hashable, Sendable, Comparable {   // original air date
+    public let year: Int, month: Int, day: Int
+    public init?(year: Int, month: Int, day: Int)   // nil unless the date exists (year 1...9999)
+    public init?(parsing text: String)              // exactly "yyyy-MM-dd", ASCII digits; nil for empty,
+                                                    // garbage and impossible dates ("2025-02-30", "2025-13-01")
+}
 
 public struct ChannelSummary: Hashable, Sendable { number: String, callSign: String, name: String }
 
@@ -125,7 +135,10 @@ public struct Recording: Identifiable, Hashable, Sendable {
     artwork: [ArtworkReference]
 }
 
-public struct TimeRange: Hashable, Sendable { start: Duration; end: Duration }   // start < end
+public struct TimeRange: Hashable, Sendable {
+    public let start: Duration, end: Duration
+    public init?(start: Duration, end: Duration)    // nil unless start < end
+}
 public typealias CommercialBreak = TimeRange
 ```
 

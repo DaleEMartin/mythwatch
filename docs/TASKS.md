@@ -64,9 +64,12 @@ Throwaway code on a branch; the deliverable is `docs/VLCKIT.md` plus the pinned 
 SPEC §3. Tests: `CalendarDay` ordering and parsing of `yyyy-MM-dd` (valid, empty, garbage);
 `TimeRange` rejects `start >= end`; `RecordingFlags` set algebra sanity.
 
-### M1-2 Test support, part 1 — Sonnet ∥
-`FixtureTransport`, `TestClock`, `Recording.fixture`, fixture loader (SPEC §8). Tests: matching
-by method and path; query matching; unmatched request reports the URL; request log order.
+### M1-2 Test support, part 1 — Sonnet (after M1-1)
+`FixtureTransport`, `TestClock`, `Recording.fixture`, fixture loader (SPEC §8). Also add the
+"HTTP transport" types of SPEC §4 (`HTTPRequest`, `HTTPResponse`, `HTTPTransport`,
+`RequestAuthorizer`) to `MythwatchBackend`, since `FixtureTransport` conforms to them; nothing
+else from §4. Tests go in `MythwatchBackendTests` (SPEC §2): matching by method and path; query
+matching; unmatched request reports the URL; request log order.
 
 ### M1-3 Version parsing, registry, probe, connector — Sonnet (after M1-1, M1-2)
 SPEC §4. Tests:
