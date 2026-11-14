@@ -18,7 +18,9 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   sharing this working tree break each other's builds; use worktree isolation to go parallel).
 - **M1-3 done and committed** (2026-11-14): version, registry, probe, connector. Its
   `backend-info.json` fixture is hand-written; M1-5 must replace it with the real capture.
-  Next: **M1-4**, then **M1-5** (first task to touch basement; GET only).
+- **M1-4 done and committed** (2026-11-14): `URLSessionTransport`. A cancelled request maps to
+  `.unreachable` (SPEC §4); view models that cancel loads must check `Task.isCancelled` rather
+  than show that error. Next: **M1-5** (first task to touch basement; GET only).
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

@@ -274,9 +274,30 @@ public protocol RequestAuthorizer: Sendable {                  // hook for Login
 }
 ```
 
-`URLSessionTransport` (in `MythwatchBackend`): 10 s request timeout, follows redirects, maps
-`URLError` to `.unreachable` / `.timedOut`, returns non-2xx responses as values (the adapter
-decides what they mean). Accepts an optional `RequestAuthorizer`; v35 passes none.
+```swift
+public struct URLSessionTransport: HTTPTransport {
+    public static let requestTimeout: TimeInterval        // 10
+    public init(configuration: URLSessionConfiguration = .default,
+                authorizer: (any RequestAuthorizer)? = nil)
+}
+```
+
+`URLSessionTransport` (in `MythwatchBackend`): 10 s request timeout, follows redirects, returns
+non-2xx responses as values (the adapter decides what they mean). Accepts an optional
+`RequestAuthorizer`; v35 passes none. The initialiser copies `configuration` (tests inject an
+ephemeral one with a stub `URLProtocol`) and sets its request timeout to 10 s. The authorizer is
+applied to each request before sending. It throws `BackendError` only, mapped as follows:
+
+| Failure | Result |
+| --- | --- |
+| `URLError.timedOut` | `.timedOut` |
+| `badServerResponse`, `cannotParseResponse`, `cannotDecodeRawData`, `cannotDecodeContentData`, `zeroByteResource`, `httpTooManyRedirects`, `redirectToNonExistentLocation`, `dataLengthExceedsMaximum` | `.malformedResponse(description)` |
+| every other `URLError` (refused, DNS, offline, lost connection, roaming, TLS, bad URL, cancelled, unknown) | `.unreachable(description)` |
+| a reply that is not an HTTP response | `.malformedResponse` |
+| any non-`URLError` failure from the session | `.unreachable(description)` |
+| authorizer throws a `BackendError` | passed through unchanged, nothing is sent |
+| authorizer throws a `URLError` | mapped by the rows above |
+| authorizer throws anything else | `.notAuthorized` |
 
 ### Adding a backend version (the procedure the seam exists for)
 
