@@ -127,6 +127,14 @@ private func text(_ r: HTTPResponse) -> String { String(decoding: r.body, as: UT
         #expect(again == data)
     }
 
+    @Test func loadsNonJSONFileWhenTheNameCarriesItsExtension() throws {
+        let data = try FixtureLoader.data(named: "sample.html", in: .module, subdirectory: "Fixtures")
+        #expect(String(decoding: data, as: UTF8.self).contains("<p>hello</p>"))
+        #expect(throws: FixtureError.self) {
+            try FixtureLoader.data(named: "sample.txt", in: .module, subdirectory: "Fixtures")
+        }
+    }
+
     @Test func missingFileErrorNamesTheFile() {
         do {
             _ = try FixtureLoader.data(named: "nope.json", in: .module, subdirectory: "Fixtures")

@@ -616,7 +616,7 @@ the in-app licences screen.
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | as named |
 | `Recording.fixture(...)` | Builder with defaults for every field |
-| `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a `.json` file (extension optional in `named`) from a `Bundle` the caller passes (its own `Bundle.module`). A missing or unreadable file throws `FixtureError` whose description names the file |
+| `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
 ### `FixtureTransport` rules
 

@@ -6,22 +6,26 @@ public struct FixtureError: Error, CustomStringConvertible, Sendable {
     public var description: String { "Fixture \"\(name)\": \(reason)" }
 }
 
-/// Reads JSON fixtures from a bundle the caller supplies (each test target passes `.module`).
+/// Reads fixtures from a bundle the caller supplies (each test target passes `.module`).
 public enum FixtureLoader {
-    /// `name` may be given with or without the `.json` extension.
+    /// `name` without an extension means `name.json`; a name with an extension
+    /// (`not-found.html`, `sample.json`) is used as given.
     public static func data(named name: String, in bundle: Bundle, subdirectory: String? = nil)
         throws -> Data
     {
-        let base = name.hasSuffix(".json") ? String(name.dropLast(5)) : name
-        guard let url = bundle.url(forResource: base, withExtension: "json", subdirectory: subdirectory)
+        let given = (name as NSString).pathExtension
+        let ext = given.isEmpty ? "json" : given
+        let base = given.isEmpty ? name : (name as NSString).deletingPathExtension
+        let file = base + "." + ext
+        guard let url = bundle.url(forResource: base, withExtension: ext, subdirectory: subdirectory)
         else {
             throw FixtureError(
-                name: base + ".json",
+                name: file,
                 reason: "not found in bundle \(bundle.bundleURL.lastPathComponent)"
                     + (subdirectory.map { " (subdirectory \($0))" } ?? ""))
         }
         do { return try Data(contentsOf: url) } catch {
-            throw FixtureError(name: base + ".json", reason: "could not be read: \(error)")
+            throw FixtureError(name: file, reason: "could not be read: \(error)")
         }
     }
 

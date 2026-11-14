@@ -30,7 +30,10 @@ let package = Package(
             name: "MythwatchBackendTests",
             dependencies: ["MythwatchBackend", "MythwatchTestSupport"],
             resources: [.copy("Fixtures")]),
-        .testTarget(name: "MythBackendV35Tests", dependencies: ["MythBackendV35"]),
+        .testTarget(
+            name: "MythBackendV35Tests",
+            dependencies: ["MythBackendV35", "MythwatchTestSupport"],
+            resources: [.copy("Fixtures")]),
         .testTarget(name: "MythwatchPlaybackTests", dependencies: ["MythwatchPlayback"]),
         .testTarget(name: "MythwatchFeaturesTests", dependencies: ["MythwatchFeatures"]),
     ],

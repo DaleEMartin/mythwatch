@@ -6,7 +6,8 @@ and `mythtv/libs/libmythbase/http/`. Read those files when this document is sile
 
 Each statement below is marked:
 
-- **[live]** observed on a real v35.0 backend with a read-only call on 2026-11-14.
+- **[live]** observed on a real v35.0 backend with a read-only call on 2026-11-14 (the
+  committed fixtures in `MythwatchKit/Tests/MythBackendV35Tests/Fixtures/` are from these calls).
 - **[source]** read from the v35 source, not exercised live.
 - **[verify]** an assumption; the task that depends on it must check it first.
 
@@ -21,11 +22,21 @@ No write call (POST) has been exercised live yet. Every write is [source] at bes
   `application/x-www-form-urlencoded` or as a flat JSON object body; when a body is present the
   query string is ignored. [source] **Use form-urlencoded for every POST.**
 - Scalar results are wrapped by type name: `{"String": "x"}`, `{"bool": true}`, `{"long": "0"}`.
-  A `long` arrives as a **string**. [live for String and long; bool is [verify]] Decode bool and
-  numeric scalars leniently: accept a JSON bool/number or a string holding one.
+  A `long` arrives as a **string**. [live for String and long] The serialiser writes `int`,
+  `uint`, `qlonglong` and `qulonglong` as JSON numbers, `bool` as a bare `true`/`false`, and every
+  other scalar type (including `long`) as a quoted string. [source] `{"bool": ...}` is
+  **[verify]**: no read-only GET in v35 returns a bool (every bool-returning method is POST-only,
+  or named `Set...`, which defaults to POST), so it cannot be observed without a write; settle it
+  in the first task that performs a nominated write. Decode bool and numeric scalars leniently:
+  accept a JSON bool/number or a string holding one.
+- JSON replies carry `Content-Type: application/json; charset="UTF-8"` (quoted charset) and
+  escape `/` as `\/`; any JSON decoder handles both. Doubles are written with six decimals
+  (`"Stars": 0.000000`). [live]
 - Timestamps are ISO 8601 UTC with `Z`, no fractional seconds: `2026-11-14T20:30:00Z`. [live]
 - Errors:
-  - Unknown method: HTTP 404 with an **HTML** body. [live]
+  - Unknown method: HTTP 404, `Content-Type: text/html; charset="UTF-8"`, body
+    `<!DOCTYPE html><HTML><HEAD><TITLE>404 Not Found</TITLE>...<H1>404 Not Found</H1></BODY></HTML>`
+    (fixture `not-found.html`). [live]
   - A service exception: HTTP 400 with an HTML body carrying the message. [source]
   - Many "not found" cases return HTTP 200 with an empty object, not an error (see below). [live]
 - A multi-backend setup can answer a file request with a redirect to the host that holds the
@@ -42,22 +53,39 @@ No write call (POST) has been exercised live yet. Every write is [source] at bes
                  "Env": {"...": "..."}, "Log": {"...": "..."}}}
 ```
 
-`GET /Myth/GetHostName` returns `{"String": "<host>"}`. [live]
+`Build` holds exactly those three keys. `Env` exposes the backend's home directory, service
+user, web root and locale, and `Log` its command-line log arguments: never log or display them.
+[live]
+
+`GET /Myth/GetHostName` returns `{"String": "<host>"}` (the bare host name, no domain). [live]
 
 ## Recordings
 
 ### `GET /Dvr/GetRecordedList` [live]
 
-Parameters used: `Descending=true`, `StartIndex`, `Count`, `Sort=starttime`,
-`IgnoreLiveTV=true`, `IgnoreDeleted=true`, `IncCast=false`, `IncChannel=true`,
-`IncArtWork=true`, `IncRecording=true`. Other parameters exist (`TitleRegEx`, `RecGroup`,
-`StorageGroup`, `Category`, `Details`); see `v2dvr.h`.
+Parameters used: `Descending=true`, `StartIndex`, `Count`, `IgnoreLiveTV=true`,
+`IgnoreDeleted=true`, `IncCast=false`, `IncChannel=true`, `IncArtWork=true`,
+`IncRecording=true`. Other parameters exist (`TitleRegEx`, `RecGroup`, `StorageGroup`,
+`Category`, `Details`, `Sort`); see `v2dvr.h`.
 
-`IncCast=false` and `IncChannel=false` were sent on one live call and the response still
-contained `Cast` and `Channel`. Treat both as hints the backend may ignore. [live]
+**Do not send `Sort`.** When `Sort` is present the backend orders by the named field(s),
+ascending unless a field is suffixed ` desc`, and ignores `Descending` entirely. [source]
+`Sort=starttime&Descending=true` returned the **oldest** recordings first; `Descending=true`
+without `Sort` returned the newest first (`ORDER BY` recording start time descending). [live]
+Start times can tie (two channels at once), so the order between pages is not guaranteed
+stable: the adapter must de-duplicate by `RecordedId`.
 
-Paging: request pages of 200 until `StartIndex + Count >= TotalAvailable`. The reference backend
-has 307 recordings across 37 titles.
+`IncCast=false`, `IncChannel=false` and `IncArtWork=false` are honoured by this call: the key
+stays and its value is `null`. [live] (`GetRecorded` takes none of these and always includes
+`Cast`, `Channel` and `Artwork`.) [live] Every `Inc*` parameter defaults to true when absent.
+[source]
+
+Paging: request pages of 200 until `StartIndex + Count >= TotalAvailable`. All six paging
+fields are always present; `StartIndex`, `Count` and `TotalAvailable` are JSON numbers,
+`Version` and `ProtoVer` strings. [live] `Count` in the reply is the number of programmes
+returned; `TotalAvailable` counts rows after filtering. Rows whose deletion is pending are
+**always skipped** by this call, whatever the parameters. [source] The reference backend has
+307 recordings across 37 titles.
 
 ```json
 {"ProgramList": {
@@ -76,20 +104,26 @@ has 307 recordings across 37 titles.
 | `Category` | string | `category` | `""` becomes nil |
 | `CatType` | string | `kind` | `series`, `movie`, `tvshow`, `sports`, `""` (21 of 307 empty) → `.unknown` |
 | `Season`, `Episode` | int | `season`, `episode` | 0 becomes nil (19 of 307 have season 0) |
-| `Airdate` | string or **null** | `originalAirDate` | `yyyy-MM-dd`; null and `""` become nil |
+| `Airdate` | string or **null** | `originalAirDate` | `yyyy-MM-dd`; null and `""` become nil. With no original air date but a release year the backend sends `<year>-01-01` (seen on every movie captured) [live, source] |
 | `Inetref` | string | `seriesKey` | e.g. `ttvdb4.py_78193`; `""` becomes nil (4 of 307) |
 | `StartTime`, `EndTime` | timestamp | `scheduledStart/End` | the programme's listing times |
 | `LastModified` | timestamp | `lastModified` | |
 | `FileSize` | int | `fileSize` | bytes; exceeds 32 bits |
 | `ProgramFlagNames` | string | `flags` | `|`-separated names, or `NONE`. See below |
-| `VideoPropNames` | string | `video`, `flags.damaged` | `|`-separated: `WIDESCREEN`, `HDTV`, `MPEG2`, `1080`, `720`, `DAMAGED`, `UNKNOWN` |
-| `Channel` | object | `channel` | `ChanNum`, `CallSign`, `ChannelName`; may be absent |
-| `Recording` | object | see below | |
-| `Artwork` | object or **null** | `artwork` | `{"ArtworkInfos": [{"URL","FileName","StorageGroup","Type"}]}` |
-| `Cast` | object | ignored in v1 | |
+| `VideoPropNames` | string | `video`, `flags.damaged` | `|`-separated, `UNKNOWN` when none. Defined: `WIDESCREEN`, `HDTV`, `MPEG2`, `AVC`, `HEVC`, `720`, `1080`, `4K`, `3DTV`, `PROGRESSIVE`, `DAMAGED` [source]; seen: `WIDESCREEN\|HDTV\|MPEG2\|1080`, `WIDESCREEN\|MPEG2` [live] |
+| `Channel` | object or **null** | `channel` | `ChanNum`, `CallSign`, `ChannelName` (strings; `ChanNum` like `7_1`). `null` with `IncChannel=false`; only `ChanId` filled when the channel no longer exists [source] |
+| `Recording` | object or **null** | see below | `null` with `IncRecording=false` and in the not-found reply |
+| `Artwork` | object or **null** | `artwork` | `{"ArtworkInfos": [{"URL","FileName","StorageGroup","Type"}]}`. `null` when `Inetref` is `""` or `IncArtWork=false`; `{"ArtworkInfos": []}` when the programme has an `Inetref` but no artwork (2 of 8 captured rows) [live, source] |
+| `Cast` | object or **null** | ignored in v1 | `{"CastMembers": [...]}`; `null` with `IncCast=false` |
+
+Other keys present on every programme and not read in v1: `Repeat` (bool), `SeriesId`,
+`ProgramId`, `Stars` (double), `ProgramFlags`, `VideoProps`, `AudioProps`, `AudioPropNames`,
+`SubProps`, `SubPropNames`, `TotalEpisodes`, `FileName`, `HostName`. [live]
 
 Parse flags from the **names**, never from the numeric `ProgramFlags`: bit values can change
-between versions. Names seen or defined in `libs/libmythbase/programtypeflags.h`:
+between versions. Names are written in bit order; a set bit with no name is written as hex,
+e.g. `0x00100000`, which falls under "anything else". [source] Names seen or defined in
+`libs/libmythbase/programtypeflags.h`:
 
 | Name | Domain flag |
 | --- | --- |
@@ -125,9 +159,14 @@ the whole list. A row with no `Recording.RecordedId` or with `RecordedId <= 0` i
 
 ### `GET /Dvr/GetRecorded?RecordedId=<id>` [live]
 
-Returns `{"Program": {...}}` with the same shape. **An unknown id returns HTTP 200 with a blank
-programme** (`"Title": null`, `"FileName": null`, zeroed numbers). The adapter must map that to
-`BackendError.notFound`: treat `Title == null` or a missing/zero `Recording.RecordedId` as not found.
+Returns `{"Program": {...}}` with the same shape, always with `Channel`, `Recording`, `Artwork`
+and `Cast` objects for a real recording. **An unknown id returns HTTP 200 with a blank
+programme** (fixture `recorded-missing.json`): `"Title": null` and most strings `null`,
+`"CatType": ""`, zeroed numbers, `"ProgramFlagNames": "NONE"`, `"VideoPropNames": "UNKNOWN"`,
+`StartTime`/`EndTime`/`LastModified` set to the current time, a `Channel` object of nulls and
+zeros, and **`"Recording": null`** and `"Artwork": null`. [live] The adapter must map that to
+`BackendError.notFound`: treat `Title == null`, `Recording == null`, or a missing/zero
+`Recording.RecordedId` as not found.
 
 ### `POST /Dvr/UpdateRecordedWatchedStatus` [source]
 
@@ -138,8 +177,9 @@ recording does not exist → `BackendError.rejected`.
 
 Form fields `RecordedId`, `ForceDelete=false`, `AllowRerecord=<bool>`. Returns `{"bool": true}`
 when the delete was **queued**; deletion is asynchronous. `false` → `.rejected`. Until it
-completes the recording can still appear in lists with the `DELETEPENDING` flag, and afterwards
-may sit in the `Deleted` recording group, which `IgnoreDeleted=true` filters out.
+completes, `GetRecorded` can still return the recording with the `DELETEPENDING` flag;
+`GetRecordedList` skips delete-pending rows. [source] Afterwards it may sit in the `Deleted`
+recording group, which `IgnoreDeleted=true` filters out.
 `POST /Dvr/UnDeleteRecording` exists; not used in v1.
 
 ## Playback state
@@ -148,8 +188,8 @@ Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the star
 
 | Call | Parameters | Result |
 | --- | --- | --- |
-| `GET /Dvr/GetLastPlayPos` [live] | `RecordedId`, `OffsetType=Duration` | `{"long": "<ms>"}`; `"0"` means none → nil |
-| `GET /Dvr/GetSavedBookmark` [live] | same | same |
+| `GET /Dvr/GetLastPlayPos` [live] | `RecordedId`, `OffsetType=Duration` | `{"long": "<ms>"}` (seen `"0"` and `"581614"`); `"0"` means none → nil. `"-1"` when the stored position cannot be converted to a duration (no seek table) [source] → nil |
+| `GET /Dvr/GetSavedBookmark` [live] | same | same (including `"-1"`) [source] |
 | `POST /Dvr/SetLastPlayPos` [source] | `RecordedId`, `OffsetType=Duration`, `Offset=<ms>` | `{"bool": ...}` |
 | `POST /Dvr/SetSavedBookmark` [source] | same | same |
 
@@ -171,7 +211,8 @@ Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the star
 {"CutList": {"Cuttings": [{"Mark": 4, "Offset": 700266}, {"Mark": 5, "Offset": 880279}]}}
 ```
 
-- `Mark` 4 = commercial start, 5 = commercial end; `Offset` in ms (a JSON number here).
+- `Mark` 4 = commercial start, 5 = commercial end; `Offset` in ms (a JSON number here). A
+  break may start at offset 0 (fixture `commbreak.json`). [live]
 - Do **not** send `IncludeFps=true`; it prepends an extra entry `{"Mark": 32, "Offset": 29970}`
   (frame rate × 1000). If any entry with a mark other than 4 or 5 appears, ignore it. [live]
 - An unknown id or an unflagged recording returns an empty list with HTTP 200. [live]
@@ -190,7 +231,7 @@ Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the star
 | Purpose | URL | Notes |
 | --- | --- | --- |
 | Stream | `/Content/GetRecording?RecordedId=<id>` | Honours `Range` (HTTP 206, `Accept-Ranges: bytes`), `Content-Type: video/mp2t`. [live] |
-| Artwork | `<ArtworkReference.locator>&Width=<w>` | `/Content/GetImageFile` accepts `Width`/`Height`. [verify] If it does not scale, omit the parameter. |
+| Artwork | `<ArtworkReference.locator>&Width=<w>` | `/Content/GetImageFile` scales. [live] A 680×1000 cover returned 214 KB unscaled and, with `Width=120`, a 119×176 JPEG of 4.8 KB: aspect kept, height derived, width may come out a pixel under the request. Scaled copies are JPEG at quality 60. **Side effect:** the first request for a size writes `<original>.<W>x<H>.jpg` next to the original on the backend and serves it from there afterwards [source], so `MediaLocator` must use a small fixed set of widths, not arbitrary view sizes. |
 | Preview frame | `/Content/GetPreviewImage?RecordedId=<id>&Width=<w>` | 200 with an image. [live] Used when a recording has no poster. |
 
 All are resolved against `BackendConnection.baseURL`. Percent-encoding already present in a
@@ -215,20 +256,30 @@ gain parameters; `Video/*` signatures change. Run
 
 ## Fixtures
 
-`Tools/capture-fixtures.sh <base-url> <out-dir>` performs only GETs and writes:
+`Tools/capture-fixtures.sh <base-url> <out-dir>` performs only plain GETs (with
+`Accept: application/json`) and writes the raw files below, plus `capture-log.txt` (each request,
+its status and content type, and the ids chosen). It picks ids from the two list pages, never
+hard-coded ones. Write the raw output outside the repository; it is never committed.
 
 | File | Source |
 | --- | --- |
 | `backend-info.json` | `/Myth/GetBackendInfo` |
-| `recorded-list-page1.json`, `-page2.json` | `/Dvr/GetRecordedList` with `Count=4`, two pages |
-| `recorded-one.json` | `/Dvr/GetRecorded` for a real id |
+| `hostname.json` | `/Myth/GetHostName` |
+| `recorded-list-page1.json`, `-page2.json` | `/Dvr/GetRecordedList` with `Count=4`, two pages. The script deliberately keeps `Sort=starttime`, so these are the **oldest** recordings: they change less often than the newest, which keeps re-captures comparable |
+| `recorded-one.json` | `/Dvr/GetRecorded` for the first listed id |
 | `recorded-missing.json` | `/Dvr/GetRecorded?RecordedId=99999999` |
-| `commbreak.json`, `commbreak-empty.json` | `/Dvr/GetRecordedCommBreak` |
-| `lastplaypos-zero.json` | `/Dvr/GetLastPlayPos` |
+| `commbreak.json` | `/Dvr/GetRecordedCommBreak` for the first listed `COMMFLAG` recording with breaks |
+| `commbreak-empty.json` | the same for a listed recording without `COMMFLAG`, else for id 99999999 |
+| `lastplaypos-zero.json` | `/Dvr/GetLastPlayPos` for a listed recording without `LASTPLAYPOS` |
+| `lastplaypos-set.json` | the same for one with `LASTPLAYPOS`, when the pages contain one |
 | `not-found.html` | `/Dvr/NoSuchMethod` (status 404) |
 
-Before committing: replace the backend's host name everywhere with `backend`, drop the `Env`
-and `Log` objects from `backend-info.json`, and remove `Cast`. Then hand-edit copies to cover
-cases the capture may miss: null `Airdate`, null `Artwork`, empty `SubTitle`, `Season` 0, a
-`LASTPLAYPOS|WATCHED|BOOKMARK` row, a `DELETEPENDING` row, a `DAMAGED` row, a `movie`, an
-unbalanced commercial-break list, and `{"bool": true}` / `{"bool": "true"}` scalar variants.
+Before committing: replace the backend's host name everywhere with `backend` (including the
+`myth://<group>@<host>/` artwork file names), drop the `Env` and `Log` objects from
+`backend-info.json`, remove `Cast`, and check for IP or MAC addresses, file-system paths, user
+names and e-mail addresses. Edit as text, not by re-serialising, so formatting and number
+formats stay as captured. Then hand-edit copies to cover cases the capture may miss: null
+`Airdate`, null `Artwork`, empty `SubTitle`, `Season` 0, a `LASTPLAYPOS|WATCHED|BOOKMARK` row, a
+`DELETEPENDING` row, a `DAMAGED` row, a `movie`, an unbalanced commercial-break list, and
+`{"bool": true}` / `{"bool": "true"}` scalar variants. The fixtures directory's `README.md`
+records, for every file, whether it was captured or hand-edited and from what.

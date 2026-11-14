@@ -1,6 +1,1 @@
-{"BackendInfo": {
-  "Build": {"Version": "v35.0", "LibX264": true, "LibDNS_SD": true, "Compiler": "made-up-compiler"},
-  "Env": {"LANG": "en_US.UTF-8"},
-  "Log": {"LogArgs": "--test"},
-  "SomethingNew": {"Nested": [1, 2, 3]}
-}}
+{"BackendInfo": {"Build": {"Version": "v35.0", "LibX264": true, "LibDNS_SD": true}}}

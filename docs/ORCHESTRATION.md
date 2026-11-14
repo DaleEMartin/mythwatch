@@ -20,7 +20,15 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `backend-info.json` fixture is hand-written; M1-5 must replace it with the real capture.
 - **M1-4 done and committed** (2026-11-14): `URLSessionTransport`. A cancelled request maps to
   `.unreachable` (SPEC §4); view models that cancel loads must check `Task.isCancelled` rather
-  than show that error. Next: **M1-5** (first task to touch basement; GET only).
+  than show that error.
+- **M1-5 done and committed** (2026-11-14): `Tools/capture-fixtures.sh`, 19 fixtures, a guard
+  test, and many corrections to `BACKEND-V35.md` from the live capture. 15 GETs were sent to
+  basement, no other method. One GET had a side effect: `/Content/GetImageFile` with `Width`
+  makes the backend write a scaled cache copy beside the original (one 120-wide cover was
+  requested). Raw captures are in `/private/tmp/claude-501/mythwatch-m15-raw/`, not in the repo.
+  **Before any push:** the fixtures keep real programme titles, channel call signs (local
+  market), Schedules Direct ids and 2025 recording times; the owner has been asked whether to
+  replace them. They are in local history from this commit on. Next: **M1-6**.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

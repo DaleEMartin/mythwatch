@@ -99,17 +99,23 @@ empty strings become nil; season/episode 0 become nil; null `Airdate`; null `Art
 `.damaged`; artwork type mapping and locator preserved verbatim; a row without a valid
 `RecordedId` is skipped while its neighbours survive; a row with every optional field missing
 still decodes; lenient scalar decoding for bool and long (JSON value or string).
+Use the committed fixtures (their `README.md` says which file covers which case). Also from the
+M1-5 capture: `Channel`, `Recording`, `Artwork` and `Cast` may each be `null`; `Artwork` may be
+`{"ArtworkInfos": []}`; a flag name written as hex (`0x00100000`) counts as unknown.
 
 ### M1-7 v35 adapter: read path — Sonnet (after M1-3, M1-6)
 `V35RecordingsService.allRecordings` / `recording(id:)`, `V35MarkupService`, `V35PlaybackStateService`
 getters, `V35MediaLocator`, `V35AdapterFactory`. Tests (all through `FixtureTransport`):
 - list: exact query parameters of the first request; pages until `TotalAvailable`; stops on an
-  empty page even if the total says more; a failing second page fails the call.
+  empty page even if the total says more; a failing second page fails the call; the request
+  does not contain `Sort`; an id repeated across pages appears once (first occurrence kept).
 - one: fixture → domain; the blank-programme fixture → `.notFound`.
 - commercial breaks: balanced list; every pairing rule in V35; mark 32 ignored; empty → `[]`;
   request does not contain `IncludeFps`.
-- positions: `"0"` → nil; `"700266"` → 700.266 s; number instead of string accepted.
-- media: stream URL; artwork URL keeps existing percent-encoding and appends the width; preview URL.
+- positions: `"0"` → nil; `"-1"` → nil; `"700266"` → 700.266 s; number instead of string accepted.
+- media: stream URL; artwork URL keeps existing percent-encoding and appends the width; preview URL;
+  requested widths are rounded up to the fixed set in V35 (each distinct width makes the backend
+  write a cached copy of the image).
 - errors: 404 HTML → `.http(404, ...)`; 400 → `.rejected` with the message when extractable;
   JSON of the wrong shape → `.malformedResponse`.
 - factory: supports 35.x only; capabilities as listed in V35.
