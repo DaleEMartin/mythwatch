@@ -93,3 +93,13 @@ public struct UserDefaultsSettingsStore: SettingsStore, @unchecked Sendable {
         defaults.set(data, forKey: Self.key)
     }
 }
+
+extension AppSettings {
+    /// The playback tunables these settings determine (SPEC 5.2, 6.2). `deinterlace` is an engine
+    /// concern and is not part of `PlaybackSettings`; the other fields keep their defaults.
+    public var playbackSettings: PlaybackSettings {
+        PlaybackSettings(
+            commercialSkip: CommercialSkipConfig(mode: commercialSkipMode),
+            skipForward: .seconds(skipForwardSeconds), skipBackward: .seconds(skipBackwardSeconds))
+    }
+}

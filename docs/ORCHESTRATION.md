@@ -78,7 +78,13 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   Open question put to the owner (SPEC R4): two breaks less than 2 s apart show about 1 s of
   the second before it is skipped; a chained-landing rule is proposed, not applied.
   `[verify]` for M0-3 / M4-2: whether VLC reports stale positions just after a seek (prompt mode
-  would re-offer a break for a tick). Next: **M3-1**, then M3-2, M4-2.
+  would re-offer a break for a tick).
+- **M3-1 done and committed** (2026-11-14): `PlaybackSettings`, `PlaybackOutcome`, `SkipBanner`,
+  `AppSettings.playbackSettings`, and `FakePlayerEngine` with a deterministic
+  `waitUntilDelivered()` (SPEC §8 "`FakePlayerEngine` rules").
+  Questions for M0-3 about `PlayerEngine` (SPEC §5): a failed load is only visible as a
+  `.failed` snapshot; there is no way to set deinterlacing through the protocol; the stream has
+  no teardown signal; `snapshots` should be read once. Next: **M3-2**, then M4-2.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

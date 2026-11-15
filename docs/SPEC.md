@@ -483,7 +483,7 @@ Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of f
 ### 5.2 `PlaybackSession`
 
 ```swift
-public struct PlaybackSettings: Sendable, Equatable {
+public struct PlaybackSettings: Sendable, Equatable {   // public memberwise init, every parameter defaulted
     var commercialSkip: CommercialSkipConfig = .init()
     var skipForward: Duration = .seconds(30)
     var skipBackward: Duration = .seconds(10)
@@ -494,6 +494,12 @@ public struct PlaybackSettings: Sendable, Equatable {
 
 public enum StartPoint: Sendable, Equatable { case beginning, resume, bookmark }
 
+/// Built from `SkipEffect`: `.showSkipped(skipped:undoUntil:)` gives `.skipped`, `.offerSkip(break)` gives `.offer`.
+public enum SkipBanner: Sendable, Equatable {
+    case skipped(Duration, undoUntil: ContinuousClock.Instant)   // distance jumped; the undo is offered until then
+    case offer(CommercialBreak)                                  // prompt mode: the break the Skip button is for
+}
+
 @MainActor @Observable public final class PlaybackSession {
     public init(recording: Recording, start: StartPoint, engine: any PlayerEngine,
                 state: any PlaybackStateService, markup: any MarkupService,
@@ -502,7 +508,7 @@ public enum StartPoint: Sendable, Equatable { case beginning, resume, bookmark }
 
     public private(set) var snapshot: PlayerSnapshot
     public private(set) var breaks: [CommercialBreak]          // for the scrubber
-    public private(set) var banner: SkipBanner?                // .skipped(Duration) or .offer
+    public private(set) var banner: SkipBanner?                // .skipped(_, undoUntil:) or .offer(_)
     public private(set) var problem: String?                   // non-fatal, e.g. "Couldn't save position"
 
     public func start() async          // loads breaks and start position, then loads the engine and plays
@@ -519,6 +525,11 @@ public struct PlaybackOutcome: Sendable, Equatable { var position: Duration; var
 
 Behaviour:
 
+- **Settings.** `PlaybackSettings` is derived from `AppSettings` by `AppSettings.playbackSettings`
+  in `MythwatchFeatures` (which `MythwatchPlayback` cannot import): `commercialSkip` is
+  `CommercialSkipConfig(mode: commercialSkipMode)`, `skipForward` / `skipBackward` are the
+  `skipForwardSeconds` / `skipBackwardSeconds` in seconds, and every other field keeps its default.
+  `deinterlace` is an engine concern and is not part of `PlaybackSettings`.
 - **Start.** Fetch commercial breaks and, for `.resume` / `.bookmark`, the stored position, in
   parallel. A failure to fetch either is not fatal: play from the beginning with no breaks and
   set `problem`. Then `engine.load(url:startAt:)` and `play()`.
@@ -969,6 +980,38 @@ the in-app licences screen.
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
+
+### `FakePlayerEngine` rules
+
+Tests of the fake live in `MythwatchPlaybackTests`, which depends on `MythwatchTestSupport`.
+
+- **Call log.** `calls` is every call in order as an `Equatable` enum: `.load(url:startAt:)`, `.play`,
+  `.pause`, `.seek(to:)`, `.stop`, `.selectAudioTrack(id?)`, `.selectSubtitleTrack(id?)`. Setting a
+  selected track logs a call (even to the same value); setting `audioTracks` / `subtitleTracks` does not.
+- **Snapshots.** `snapshot` starts as `.idle`, position 0, no duration, rate 0. `emit(_:)` sets it and
+  delivers it, always, even when equal to the current value (a real engine repeats positions). Convenience
+  emitters, each building on the current snapshot and emitting: `advancePlayback(by:)` (adds to the position
+  only while `.playing`; otherwise nothing and no emission), `setStatus(_:)`, `setPosition(_:)`,
+  `setDuration(_:)`, `emitEnded()` (status `.ended`, rate 0, position = duration when known),
+  `emitFailed(_:)` (status `.failed(message)`, rate 0).
+- **Automatic responses** (`automaticResponses`, default true); each one emits: `load` gives `.loading`
+  at `startAt ?? 0`, rate 0, duration kept; `play` gives `.playing`, rate 1; `pause` gives `.paused`,
+  rate 0; `seek(to:)` sets the position immediately (no clamping, status unchanged); `stop` gives
+  `.idle`, position 0, rate 0, duration kept. With `automaticResponses = false` calls are only logged and
+  nothing changes or is emitted: the test drives every snapshot (a slow load, a stale position after a seek).
+- **Stream.** `snapshots` is one `AsyncStream` created in `init`; every read returns it, so two
+  consumers would split the elements. It is unbounded and delivers every emission from the start of the
+  fake's life, including ones made before the consumer began reading; it does not start with the current
+  value. `finish()` ends it once buffered elements are read; emits after `finish()` update `snapshot`
+  but are not delivered. It also ends when the fake is deallocated, releasing a waiting consumer; a
+  cancelled consumer's loop ends. No continuation leaks.
+- **Hand-off.** `await engine.waitUntilDelivered()` returns when the consumer has taken everything emitted
+  and its loop has come back asking for the next element, so the loop body has finished for the last
+  snapshot. It returns at once if nothing was emitted, ends on cancellation, and is signalled by
+  continuations, never polled. It is for one consumer that has started reading: with no consumer
+  and something emitted it waits until cancelled.
+- Everything is `@MainActor`; the queue lives in a small `Mutex`-guarded `Sendable` class so `deinit`
+  can end the stream.
 
 ### `FixtureTransport` rules
 
