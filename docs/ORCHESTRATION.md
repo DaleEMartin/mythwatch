@@ -94,6 +94,21 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - Confirmed by the owner 2026-11-14: bundle-id prefix `com.daleemartin` (the "e" is a middle
   initial); the `NSLocalNetworkUsageDescription` wording in `Mythwatch/Info.plist`.
 - Nothing has been pushed anywhere. No GitHub repo exists; create one only when the owner asks.
+## Owner decisions of 2026-11-15 (approved; apply after M3-2, one at a time)
+
+1. **Fixtures:** replace channel call signs, channel names, channel numbers, Schedules Direct
+   ids (`XMLTVID`) and channel icon names with made-up values; keep the four programme titles.
+   The real values stay in local history from commit `40a7c8d` on, so history must be rewritten
+   (or the repo re-initialised) before the first push. Ask the owner how when a push comes up.
+2. **Skip rules (SPEC §5.1 R4):** chain the landing. When R2 skips a break and the next armed,
+   eligible break starts before `landing + quietPeriod`, land at that break's landing point
+   instead, and repeat. A follow-up to M4-1, before or with M4-2.
+3. **Library (SPEC §6.1):** a show's `kind` is the most common kind in the group, not the newest
+   recording's. Poster rule unchanged. All other M2-2 choices stand.
+4. **Settings UI (M2-7):** auto-save on leaving the screen when `canSave`.
+5. Every other on-screen default from M2-4, M2-5, M2-6 and M4-1 stands as built, including the
+   `UserMessage` wording.
+
 ## Roles the owner chose
 
 - **Fable orchestrates and reviews; it does not write application code.** Implementation is done
