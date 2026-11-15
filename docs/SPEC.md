@@ -514,12 +514,42 @@ public protocol SettingsStore: Sendable {
 ```
 
 `UserDefaultsSettingsStore` stores one JSON blob under the key `settings.v1` and takes its
-`UserDefaults` in `init`. Unknown or corrupt data loads as defaults. `InMemorySettingsStore` lives
-in test support.
+`UserDefaults` in `init`. It is `@unchecked Sendable` (the SDK does not declare `UserDefaults`
+`Sendable`; the store holds one immutable reference to a thread-safe object). `InMemorySettingsStore`
+lives in test support.
 
-`BackendAddress.parse(_ text: String) -> BackendConnection?` accepts `host`, `host:port`,
-`http://host`, `http://host:port`, with surrounding whitespace; default scheme `http`, default
-port 6544; rejects empty input and anything with a path or query.
+Loading never throws and never discards more than it must:
+
+- No value, a value under the key that is not `Data`, empty data, data that is not JSON, or JSON
+  that is not an object: the whole of `AppSettings()` (defaults).
+- Unknown keys are ignored. A missing key loads as that field's default and the other fields keep
+  their stored values (`AppSettings` has a hand-written `init(from:)`, so settings added in a later
+  version never wipe an existing user's).
+- A field whose value has the wrong type, an unknown `commercialSkipMode` string, or a skip step
+  outside its choices (forward 10/15/30/60, backward 5/10/15/30; exposed as
+  `AppSettings.skipForwardChoices` / `skipBackwardChoices`) loads as that field's default; the other
+  fields are unaffected. Values are not clamped to the nearest choice.
+
+`CommercialSkipMode` (section 5.1) is the only `MythwatchPlayback` type `AppSettings` needs; it
+was added ahead of task M4-1 so M2-1 could build.
+
+`BackendAddress.parse(_ text: String) -> BackendConnection?` is pure and makes no request. Rules,
+applied after trimming surrounding whitespace and newlines:
+
+- Accepts `host`, `host:port`, `http://host`, `http://host:port`, and the same with `https://`.
+  Default scheme `http`; default port 6544 whatever the scheme (`https://host` gives
+  `https://host:6544`). The result's `baseURL` always has scheme, host and explicit port, and no
+  path, query or fragment, e.g. `http://host:6544`.
+- The scheme is case-insensitive and must be `http` or `https`; anything else (`ftp://host`) is nil.
+- The host is lower-cased (`MyBackend.LOCAL` gives `mybackend.local`). It must be a name of
+  dot-separated non-empty labels of ASCII letters, digits, `-` and `_` (so IPv4 literals and
+  `.local` names are accepted unchanged), or a bracketed IPv6 literal (`[::1]`, with or without a
+  port). An unbracketed IPv6 address, an empty host, or a leading, trailing or doubled dot is nil.
+- The port must be 1 to 65535, ASCII digits only; `host:0`, `host:70000`, `host:`, `host:notaport`
+  are nil.
+- A single trailing `/` alone is ignored (`http://host/` gives `http://host:6544`). Any other path
+  (`host/path`, `host//`), any query (`host?x=1`), any fragment, user-info (`user@host`), or space
+  inside the address is nil.
 
 ### 6.3 Composition
 

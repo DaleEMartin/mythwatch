@@ -42,7 +42,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `MYTHWATCH_LIVE_BACKEND` is set. Passed against basement (307 recordings, list in 0.24 s,
   list and single-recording endpoints agree, stream URL answers a ranged GET with 206).
   **Milestone 1 is complete.** Still `[verify]`: the `{"bool": ...}` reply and clearing with
-  `Offset=0` (both need a write, M3-5), Bonjour TXT (M5-2). Next: **M2-1**, then M2-2, M2-3.
+  `Offset=0` (both need a write, M3-5), Bonjour TXT (M5-2).
+- **M2-1 done and committed** (2026-11-14): `AppSettings`, `UserDefaultsSettingsStore`,
+  `BackendAddress.parse`, and `CommercialSkipMode` added early to `MythwatchPlayback`. Tests
+  must never use `UserDefaults(suiteName:)`: it leaves a plist in `~/Library/Preferences` per
+  suite; use the in-memory subclass in `AppSettingsTests.swift`. Next: **M2-2**, then M2-3.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not
