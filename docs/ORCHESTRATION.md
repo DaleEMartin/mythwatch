@@ -35,7 +35,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   method is a stub that sends nothing and throws `.rejected` until M3-5 / M5-1, so no code in
   the repo can POST to a backend yet; the adapter still advertises the write capabilities
   (as `BACKEND-V35.md` lists them). Image widths are rounded up to 160/320/640/1280.
-  Next: **M1-8**, then **M1-9** (live, GET only), then the Milestone 1 status to the owner.
+- **M1-8 done and committed** (2026-11-14): `AdapterConformance` (8 checks, SPEC §9.1), passing
+  for v35 and proven to fail against broken adapters. M2-3 must add `MythwatchTestSupport` to
+  `MythwatchFeaturesTests` and run the suite against `FakeBackendAdapter`.
+  Next: **M1-9** (live, GET only), then the Milestone 1 status to the owner.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

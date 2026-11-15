@@ -643,6 +643,106 @@ the in-app licences screen.
 - **Adapter conformance suite:** `AdapterConformance` in `MythwatchTestSupport` is a set of
   behaviour checks written against `BackendAdapter` plus a small `ConformanceScenario` protocol
   that each adapter's test target implements to supply fixtures. Every adapter must pass it.
+  Details in section 9.1.
+
+### 9.1 Adapter conformance suite
+
+The suite is version-neutral: it names no endpoint path or wire key, and knows an adapter only
+through `BackendAdapter` and the domain ports. It never calls a write method (`setWatched`,
+`delete`, `setResumePosition`, `setBookmark`); **write behaviour is outside the suite for now**,
+so an adapter that advertises a write capability whose method is still a stub (v35 until M3-5)
+is not in violation.
+
+```swift
+public protocol ConformanceScenario: Sendable {
+    var connection: BackendConnection { get }              // media URLs must lie under its baseURL
+    func makeAdapter() async throws -> any BackendAdapter  // fresh adapter over canned data; once per check
+    var absentID: RecordingID { get }                      // not listed; recording(id:) must throw .notFound
+    var idWithBreaks: RecordingID { get }                  // has at least one commercial break
+    var idWithoutStoredPosition: RecordingID { get }       // no resume position and no bookmark
+    var idWithResumePosition: RecordingID? { get }         // has a resume position; nil if the data has none
+    var idWithBookmark: RecordingID? { get }               // has a bookmark; nil if the data has none
+}
+
+public enum AdapterConformance {
+    public enum Check: String, CaseIterable, Sendable, Codable {
+        case listIDsAreUnique, listOrderIsStable, recordingByIDEqualsListedValue,
+             unknownIDThrowsNotFound, commercialBreaksAreWellFormed, positionIsNilWhenNoneStored,
+             mediaURLsAreUnderBaseURL, capabilitiesMatchOptionalServices
+        public func violations(in scenario: any ConformanceScenario) async -> [String]  // empty = pass
+    }
+    public static func isAbsolute(_ url: URL) -> Bool
+    public static func isURL(_ url: URL, under base: URL) -> Bool
+    public static func breakViolations(_ spans: [(start: Duration, end: Duration)]) -> [String]
+}
+```
+
+A scenario's data must list at least two recordings, and every listed id must be fetchable with
+`recording(id:)`; a list shorter than two is reported as a violation by every check that reads
+the list, so a check cannot pass on data too thin to tell anything apart.
+
+**Reporting without `Testing`.** `MythwatchTestSupport` cannot import `Testing` (section 8), so a
+check does not assert: it returns its violations as plain-English messages naming the call, the
+id and the values involved. Anything that throws inside a check (including `makeAdapter`) becomes a
+violation, never an escaping error. Each adapter's test target runs the whole suite with one
+parameterised test over `allCases`:
+
+```swift
+@Test(arguments: AdapterConformance.Check.allCases)
+func passes(_ check: AdapterConformance.Check) async {
+    let violations = await check.violations(in: MyScenario())   // `try` if its init throws
+    #expect(violations.isEmpty, "\(violations.joined(separator: "\n"))")
+}
+```
+
+Each check is a separate test case, reported under its case name. A new case added to `Check`
+runs in every adapter's test target without an edit there; targets must iterate `allCases`, never
+a hand-picked list. One check can be re-run alone from Xcode's test navigator (the argument is
+`Codable`, so its test case has a stable id) or by calling `violations(in:)`; `swift test --filter`
+(Swift 6.4.2) cannot select a single argument, only the whole test, which runs in milliseconds.
+
+**The checks.**
+
+| Check | Passes when |
+| --- | --- |
+| `listIDsAreUnique` | `allRecordings()` lists no id twice |
+| `listOrderIsStable` | two `allRecordings()` calls on the same adapter list the same ids in the same order (no particular order is required) |
+| `recordingByIDEqualsListedValue` | for every listed recording, `recording(id:)` returns a value `==` to the listed one (every field of `Recording`; a mismatch is reported field by field) |
+| `unknownIDThrowsNotFound` | `absentID` is not listed and `recording(id: absentID)` throws exactly `BackendError.notFound` |
+| `commercialBreaksAreWellFormed` | for every listed id and `idWithBreaks`, `commercialBreaks(for:)` satisfies `breakViolations` (below), and `idWithBreaks` has at least one break |
+| `positionIsNilWhenNoneStored` | `resumePosition(for:)` and `bookmark(for:)` both return nil for `idWithoutStoredPosition`; each returns a duration above zero for `idWithResumePosition` / `idWithBookmark` when the scenario names one |
+| `mediaURLsAreUnderBaseURL` | for every listed recording and widths 1, 320 and 4096, `streamURL`, `previewImageURL` and `artworkURL` of every artwork reference are absolute and under the connection's base URL. `artworkURL` may return nil |
+| `capabilitiesMatchOptionalServices` | `.liveTV ∈ capabilities` ⇔ `liveTV != nil`, and `.videoLibrary ∈ capabilities` ⇔ `videoLibrary != nil` |
+
+Definitions:
+
+- **Absolute:** the `URL` has no `baseURL` and has a non-empty scheme and host of its own.
+- **Under the base URL:** absolute, with the same scheme and host as the base (compared
+  case-insensitively) and the same port, where an absent port means 80 for `http` and 443 for
+  `https`; and the path (percent-encoded) equals the base's path or continues it after a `/`,
+  with trailing slashes on the base path ignored and an empty base path admitting every path. So
+  `http://backendx:6544/`, `http://backend.evil:6544/`, `http://backend:6544@evil/`,
+  `https://backend:6544/` and `http://backend:65440/` are not under `http://backend:6544`, and
+  `/mythtv/x` is not under a base path `/myth`.
+- **Well-formed breaks** (`breakViolations`): each range is non-empty (`start < end`); ranges are
+  sorted by `start`; each starts at or after the previous one's `end` (touching is allowed,
+  overlapping is not). `TimeRange` cannot hold an empty range, so that part is tested on raw spans.
+- **Capabilities:** only the two capabilities with an optional service are checked. The others
+  (`.recordings`, `.resumePosition`, `.bookmarks`, `.commercialBreaks`, `.deleteRecording`,
+  `.login`) belong to non-optional services or to the transport and are not checked by the suite.
+
+**Adopting it.** An adapter's test target (which depends on `MythwatchTestSupport`) adds a type
+conforming to `ConformanceScenario` that builds its adapter over its own canned data (v35:
+`V35ConformanceScenario`, a `FixtureTransport` answering from the committed fixtures) and the
+parameterised test above. M2-3 adds the same for `FakeBackendAdapter` in `MythwatchFeaturesTests`.
+
+**The suite can fail.** `MythBackendV35Tests` holds, for each check, deliberately broken adapters
+(the v35 adapter with one service or property replaced) and asserts the check reports them:
+duplicate ids, unstable order, a fetched value differing from the listed one, an unknown id that
+returns a value or throws another error, overlapping, unsorted and missing breaks, a stored
+position where none is, a missing stored position, stream, preview and artwork URLs on another
+host or relative, and capabilities disagreeing with the optional services in both directions.
+When a check is added, add its broken-adapter test there too.
 - **Live tests:** tagged `.live`, skipped unless the environment variable
   `MYTHWATCH_LIVE_BACKEND` is set. Read-only endpoints only.
 - **Write tests against a real backend** are manual, on a recording the owner nominates, and are
