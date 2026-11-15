@@ -425,6 +425,32 @@ Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of f
   whose landing point is its start), nothing is emitted and the break plays; R6 later passes it.
   `skipped` is the distance actually jumped, `landing point - position`. `undoUntil` is
   `now + undoWindow`. The *skip origin* used by R7 is the position of the tick that fired.
+  *Chaining (owner decision, 2026-11-15).* A skip (here, or an accepted offer, R9) does not stop
+  at the first break if the quiet period it starts (R4) would let a following break play. Let
+  `i` be the break the skip is for and `L = landing(i)`. Walk the breaks after `i` in order; stop
+  at the first break `k` that is suppressed (R8), guarded (R5, with this tick's `duration`; for
+  `acceptOffer`, the most recent tick's), or has `start(k) >= L + quietPeriod`. Otherwise, if `k`
+  has a skippable part, set `L = landing(k)` and make `k` the last break of the chain; a break
+  with no skippable part (shorter than `landBeforeEnd`) is never a landing point and leaves `L`
+  as it is, so it is jumped over only if a later break is chained, and otherwise plays. Then go
+  on to the next break. The skip seeks once, to the final `L`, with one banner. Why `<`: the
+  skipper assumes playback resumes at `L` at 1x (it does not see the engine's `rate`), so break
+  `k` would be entered `start(k) - L` after the skip, and the quiet period covers `now < skip +
+  quietPeriod`; a break entered exactly when it ends is skipped on entry and needs no chaining.
+  The *chain* is break `i` through the last chained break, including any short breaks between.
+  `skipped` is `final L - origin`; the banner's undo (R7) returns to `origin - undoRewind` and
+  suppresses every break of the chain, so all of them then play. The armed break afterwards is
+  the first armable break after the chain. Only the last chained break's landing tail
+  (`landBeforeEnd`) plays. A position reported inside any chained break shortly after the skip
+  (stale engine positions, ticks repeated or going backwards) causes no new skip or offer, as for
+  the skipped break itself: during the quiet period nothing acts, and R6 passes the chained
+  breaks once the position reaches the landing point. The price: the programme in the gaps
+  between chained breaks is skipped too; each such gap is shorter than `quietPeriod` (under
+  `quietPeriod - landBeforeEnd`, 2 s by default, after a break at least `landBeforeEnd` long), and
+  a gap of `quietPeriod` or more is never crossed. The one case chaining does not cover: a
+  suppressed break ends the chain, so a non-suppressed break just after it (possible only when it
+  was guarded when the suppressed break's skip was undone, and the recording has since grown) is
+  entered during the quiet period and plays until the quiet period ends, then is skipped (R4).
 - **R3 Seeking into a break does not skip it.** Because R1 arms the first break starting at or
   after the new position, a break the user lands inside is never armed. It plays. In prompt mode it
   is not offered.
@@ -434,11 +460,10 @@ Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of f
   accepted offer and an undo; not by a mode change. It covers `now < start + quietPeriod`. R6 still
   runs during it (it emits nothing). "Still qualifies" means the position is in the armed break's
   skippable part and the break is not guarded; a break passed during the quiet period was
-  already passed over by R6, and one whose landing point was reached is not skipped. Consequence
-  (left as written; an open question for the owner, raised by M4-1): after a skip lands at
-  `end - landBeforeEnd`, a next break
-  starting less than `quietPeriod - landBeforeEnd` (2 s by default) after that end is entered during
-  the quiet period and plays until it ends, then is skipped.
+  already passed over by R6, and one whose landing point was reached is not skipped. A break that
+  playback would enter during the quiet period started by a skip is not left to play: R2's
+  chaining jumps over it in the same skip (this settles the question M4-1 raised). A break entered
+  during the quiet period started by a `userSeeked` or an undo plays until it ends, as above.
 - **R5 End guard.** If `duration` is known and `armed.end + endGuard > duration`, do not skip
   that break; arm the next one (there will be none). *Refinement:* evaluated on every tick with that
   tick's `duration`. A guarded break stays armed but is neither skipped nor offered, so if a
@@ -449,8 +474,8 @@ Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of f
   armed break ends after the position, so a jump past several breaks arms the first not yet ended;
   if the position is in that one's skippable part, R2 (or R9) applies to it in the same tick.
 - **R7 Undo.** `undo` within `undoWindow` of a skip emits `.seek(to: max(0, skipOrigin - undoRewind))`
-  and `.hideSkipped`, marks that break *suppressed* for the life of the skipper, and starts a quiet
-  period. After the window, `tick` emits `.hideSkipped` once and `undo` does nothing.
+  and `.hideSkipped`, marks that break (every break of a chained skip, R2) *suppressed* for the
+  life of the skipper, and starts a quiet period. After the window, `tick` emits `.hideSkipped` once and `undo` does nothing.
   *Refinements:* "within" is `now < undoUntil`; the first tick with `now >= undoUntil` hides the
   banner. `undo` re-arms from the target as R1 does, so if the target lies inside an earlier break
   that break plays (R3). Only the most recent skip can be undone: a second skip during the first's
@@ -466,7 +491,10 @@ Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of f
   guarded, on `userSeeked` (always, including a seek within the break, which then plays per R3), on
   `undo`, and on a mode change. `acceptOffer` with no offer showing returns `[]`; with an offer
   showing but the position at or past the landing point it returns `[.withdrawOffer]`. An accepted
-  offer starts a quiet period (which delays nothing in prompt mode).
+  offer starts a quiet period (which delays nothing in prompt mode), and chains as R2 does: the
+  offer named only the first break, but one press of Skip lands after the whole back-to-back group
+  (the viewer asked to get out of the adverts; the banner shows the full distance and its undo
+  returns them before the group).
 - **R10 Off.** No effects, ever. Breaks are still exposed for the scrubber. *Refinement:* `tick`,
   `userSeeked`, `acceptOffer` and `undo` return `[]`. Tidying up on the way into `.off` is done by
   `setMode` (R11).

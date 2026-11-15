@@ -50,7 +50,8 @@ public struct CommercialSkipper: Sendable, Equatable {
 
     /// The skip that the banner on screen belongs to (R7).
     private struct Banner: Sendable, Equatable {
-        var breakIndex: Int
+        /// Every break the skip covered: the one it fired for through the last one chained (R2).
+        var breakIndices: ClosedRange<Int>
         var origin: Duration
         var undoUntil: ContinuousClock.Instant
     }
@@ -66,6 +67,8 @@ public struct CommercialSkipper: Sendable, Equatable {
     private var offered: Int?
     /// The last position seen, to notice a position that goes backwards without a seek.
     private var lastPosition: Duration?
+    /// The last tick's duration: `acceptOffer` has none of its own, and R2's chaining checks R5.
+    private var lastDuration: Duration?
     /// Set by a mode change; the next tick re-arms from its position (R11).
     private var rearmPending = false
 
@@ -111,6 +114,7 @@ public struct CommercialSkipper: Sendable, Equatable {
             armed = earlier
         }
         lastPosition = position
+        lastDuration = duration
 
         // R6 (and suppressed breaks are never armed, R8).
         while let index = armed, position >= breaks[index].end {
@@ -124,7 +128,7 @@ public struct CommercialSkipper: Sendable, Equatable {
         switch config.mode {
         case .auto:
             if !isQuiet(at: now), let index = armed, qualifies(index, position, duration) {   // R2, R4, R5
-                let skip = performSkip(index, from: position, now: now)
+                let skip = performSkip(index, from: position, duration: duration, now: now)
                 seek.append(skip.seek)
                 additions.append(skip.banner)
             }
@@ -180,7 +184,7 @@ public struct CommercialSkipper: Sendable, Equatable {
         guard config.mode == .prompt, let index = offered else { return [] }
         offered = nil
         guard isBeforeLanding(index, position) else { return [.withdrawOffer] }
-        let skip = performSkip(index, from: position, now: now)
+        let skip = performSkip(index, from: position, duration: lastDuration, now: now)
         return [skip.seek, .withdrawOffer, skip.banner]
     }
 
@@ -188,7 +192,7 @@ public struct CommercialSkipper: Sendable, Equatable {
     public mutating func undo(now: ContinuousClock.Instant) -> [SkipEffect] {
         guard config.mode != .off, let shown = banner, now < shown.undoUntil else { return [] }
         let target = max(.zero, shown.origin - config.undoRewind)
-        suppressed.insert(shown.breakIndex)
+        suppressed.formUnion(shown.breakIndices)
         banner = nil
         quietUntil = now + config.quietPeriod
         armed = firstArmable(atOrAfter: target)
@@ -221,17 +225,40 @@ public struct CommercialSkipper: Sendable, Equatable {
 
     // MARK: - Private
 
-    /// R2 for one break: seek to the landing point, show the banner, start a quiet period and
-    /// arm the next break.
-    private mutating func performSkip(_ index: Int, from position: Duration, now: ContinuousClock.Instant)
-        -> (seek: SkipEffect, banner: SkipEffect)
-    {
-        let target = landing(index)
+    /// R2 for one break and the breaks chained after it: seek to the last one's landing point,
+    /// show the banner, start a quiet period and arm the first break after the chain.
+    private mutating func performSkip(
+        _ index: Int, from position: Duration, duration: Duration?, now: ContinuousClock.Instant
+    ) -> (seek: SkipEffect, banner: SkipEffect) {
+        let last = chainEnd(from: index, duration: duration)
+        let target = landing(last)
         let undoUntil = now + config.undoWindow
-        banner = Banner(breakIndex: index, origin: position, undoUntil: undoUntil)
+        banner = Banner(breakIndices: index...last, origin: position, undoUntil: undoUntil)
         quietUntil = now + config.quietPeriod
-        armed = nextArmable(after: index)
+        armed = nextArmable(after: last)
         return (.seek(to: target), .showSkipped(skipped: target - position, undoUntil: undoUntil))
+    }
+
+    /// R2's chaining: the last break the skip for `first` lands after. Playback resumes at the
+    /// landing point at 1x, so a following break starting less than `quietPeriod` after it would
+    /// be entered during the skip's quiet period; such a break is jumped over too, and the test
+    /// repeats from its landing point. A suppressed (R8) or guarded (R5) break ends the chain. A
+    /// break with no skippable part is never a landing point: it is passed, and belongs to the
+    /// chain only if a later break does.
+    private func chainEnd(from first: Int, duration: Duration?) -> Int {
+        var last = first
+        var point = landing(first)
+        var next = first + 1
+        while next < breaks.count, !suppressed.contains(next), !isGuarded(next, duration),
+            breaks[next].start < point + config.quietPeriod
+        {
+            if landing(next) > breaks[next].start {
+                last = next
+                point = landing(next)
+            }
+            next += 1
+        }
+        return last
     }
 
     /// R1: the first break, not suppressed, whose start is at or after `position`.

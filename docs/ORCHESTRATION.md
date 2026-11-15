@@ -93,7 +93,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   Tell every agent that runs tests with suspension points to run `swift test` under
   `timeout 120` and never wait on an unbounded run.
 - **Show kind follow-up done and committed** (2026-11-15): most common kind, `.unknown` ignored
-  unless all are unknown (SPEC §6.1). Next: the chained landing (SPEC §5.1 R4), then **M4-2**.
+  unless all are unknown (SPEC §6.1).
+- **Chained landing done and committed** (2026-11-15): SPEC §5.1 R2 "Chaining". One skip lands
+  after every break that would start during its quiet period; undo suppresses the whole chain.
+  Told to the owner: programme in gaps under 2 s between chained breaks is skipped too.
+  Next: **M4-2**, the last task that does not need the owner.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

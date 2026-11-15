@@ -45,25 +45,27 @@ struct SplitMix64 {
 /// - **Not landed in by the viewer (R3):** an `undo` is the viewer's action; if it lands inside a
 ///   break that starts before the landing point, that break plays (R1 never arms it) until the
 ///   position leaves it.
-/// - **Quiet period (R4):** no automatic action before `quietUntil = lastSkipOrUndo + quietPeriod`.
-///   A break entered during that time legitimately plays until the quiet period ends. So the
-///   invariant is: on every tick at or after `quietUntil` whose position is inside an eligible
-///   break, that same tick seeks to the break's landing point (the position rests inside for at
-///   most that one tick). During the quiet period resting is allowed, and the test also checks
-///   that the skipper does not seek then.
+/// - **Quiet period (R4) and chaining (R2):** no automatic action before `quietUntil = lastSkipOrUndo
+///   + quietPeriod`. Since R2 chains, a quiet period started by a *skip* can no longer hold an
+///   eligible break: every break the playback would enter before it ends was jumped over by the
+///   skip itself. So the invariant is: on every tick whose position is inside an eligible break,
+///   that same tick seeks (the position rests inside for at most that one tick), **except** while a
+///   quiet period started by an *undo* is running (the viewer's own action: a break entered then
+///   plays until it ends, then R4's "still qualifies" applies). The only other exception the rules
+///   leave is R8's: chaining stops before a suppressed break, so during a skip's quiet period the
+///   position may rest in an eligible break that lies beyond a suppressed break following the
+///   chain. The simulation counts how often that allowance is used (`r8AllowanceUses`; 0 in the
+///   400 cases when chaining was added, since with a fixed duration the break after a suppressed
+///   one was always suppressed with it; the case needs a growing recording, see
+///   `r2_chainedStopsBeforeASuppressedBreakSoACloseBreakAfterItPlaysUntilTheQuietEnds`). The test
+///   also checks that the skipper never seeks during any quiet period.
 ///
-/// The R4 allowance is a real gap in the rules, not slack in the test: after a skip lands at
-/// `end - landBeforeEnd`, a next break starting less than `quietPeriod - landBeforeEnd` (2 s with
-/// the defaults) after the first one's end is entered during the quiet period and plays for up to
-/// that long before it is skipped. The rule is left as written and flagged for the owner; the
-/// example test `r4_quietPeriodAfterASkipDelaysTheSkipOfABreakStartingSoonAfterTheLanding` shows
-/// the case.
-///
-/// The test also checks, on every tick: at most one seek; every seek goes forward to the landing
-/// point of an eligible break containing the position, with `.showSkipped(landing - position,
+/// The test also checks, on every tick: at most one seek; every seek goes forward from inside an
+/// eligible break `i` to the landing point of the last break of `i`'s chain (computed by
+/// `chainLast`, a restatement of R2's chaining), with `.showSkipped(landing - position,
 /// now + undoWindow)` right after it; no offers in auto; `.hideSkipped` exactly on the first tick
 /// at or after `undoUntil` with no new skip; `undo` gives `[.seek(max(0, origin - undoRewind)),
-/// .hideSkipped]`.
+/// .hideSkipped]` and suppresses every break of the undone chain.
 ///
 /// A failure names its seed; replay that one case with `CommercialSkipperPropertyTests.run(seed:)`
 /// (or `runPrompt(seed:)`), which returns the first violation as text.
@@ -118,17 +120,44 @@ struct SplitMix64 {
     }
 
     @Test func autoNeverRestsInsideAnEligibleBreakForMoreThanOneTick() {
+        var r8AllowanceUses = 0
         for index in 0..<Self.caseCount {
             let seed = Self.baseSeed &+ UInt64(index)
-            if let failure = Self.run(seed: seed) {
+            if let failure = Self.run(seed: seed, r8AllowanceUses: &r8AllowanceUses) {
                 Issue.record("seed \(seed) (case \(index)): \(failure)")
                 return
             }
         }
     }
 
-    /// Runs one case; returns a description of the first violation, or nil.
+    /// R2's chaining restated for the simulation: the last break of the chain starting at `i`.
+    static func chainLast(
+        _ i: Int, breaks: [CommercialBreak], config cfg: CommercialSkipConfig,
+        excluded: (Int) -> Bool
+    ) -> Int {
+        func landing(_ k: Int) -> Duration { max(breaks[k].start, breaks[k].end - cfg.landBeforeEnd) }
+        var last = i
+        var point = landing(i)
+        var k = i + 1
+        while k < breaks.count, !excluded(k), breaks[k].start < point + cfg.quietPeriod {
+            if landing(k) > breaks[k].start {
+                last = k
+                point = landing(k)
+            }
+            k += 1
+        }
+        return last
+    }
+
+    /// Runs one case; returns a description of the first violation, or nil. `r8AllowanceUses`
+    /// counts ticks that rested in an eligible break during a skip's quiet period because the
+    /// chain stopped before a suppressed break (see the type comment).
     static func run(seed: UInt64) -> String? {
+        var unused = 0
+        return run(seed: seed, r8AllowanceUses: &unused)
+    }
+
+    static func run(seed: UInt64, r8AllowanceUses: inout Int) -> String? {
         var rng = SplitMix64(seed: seed)
         let c = makeCase(&rng)
         var sut = CommercialSkipper(breaks: c.raw, config: c.config)
@@ -144,8 +173,9 @@ struct SplitMix64 {
         var position = Duration.zero
         var clock = Duration.zero
         var quietUntil: Duration?
+        var quietFromSkip = false   // the running quiet period was started by a skip, not an undo
         var bannerUntil: Duration?
-        var lastSkip: (index: Int, origin: Duration)?
+        var lastSkip: (chain: ClosedRange<Int>, origin: Duration)?
         var suppressed: Set<Int> = []
         var viewerLanded: Int?   // R3: a break an undo landed inside
 
@@ -170,7 +200,9 @@ struct SplitMix64 {
                 return "offer effect in auto mode \(effects) at \(where_)"
             }
 
+            var seeked = false
             if case .seek(let target)? = effects.first {
+                seeked = true
                 if inQuiet { return "skipped during the quiet period at \(where_)" }
                 guard let i = breaks.indices.first(where: { inSkippablePart($0, p) }) else {
                     return "seek to \(target) from outside any break at \(where_)"
@@ -179,20 +211,33 @@ struct SplitMix64 {
                     return "skipped an ineligible break \(i) (suppressed \(suppressed.contains(i)), "
                         + "guarded \(guarded(i)), viewer-landed \(viewerLanded == i)) at \(where_)"
                 }
+                let last = chainLast(i, breaks: breaks, config: cfg) {
+                    suppressed.contains($0) || guarded($0)
+                }
                 let expected: [SkipEffect] = [
-                    .seek(to: landing(i)),
-                    .showSkipped(skipped: landing(i) - p, undoUntil: now + cfg.undoWindow),
+                    .seek(to: landing(last)),
+                    .showSkipped(skipped: landing(last) - p, undoUntil: now + cfg.undoWindow),
                 ]
                 if effects != expected { return "effects \(effects), expected \(expected) at \(where_)" }
                 quietUntil = clock + cfg.quietPeriod
+                quietFromSkip = true
                 bannerUntil = clock + cfg.undoWindow
-                lastSkip = (i, p)
-                position = landing(i)
-            } else {
-                if let i = restingIn, !inQuiet {
+                lastSkip = (i...last, p)
+                position = landing(last)
+            } else if let i = restingIn {
+                // Allowed only in an undo's quiet period, or (R8) in a skip's quiet period when a
+                // suppressed break lies between the chain's last break and this one.
+                let r8Stop = quietFromSkip && (lastSkip.map { skip in
+                    ((skip.chain.upperBound + 1)..<i).contains { suppressed.contains($0) }
+                } ?? false)
+                if !inQuiet || (quietFromSkip && !r8Stop) {
                     return "rested inside eligible break \(i) (\(breaks[i].start)..<\(breaks[i].end)) "
-                        + "outside the quiet period at \(where_)"
+                        + "\(inQuiet ? "during a skip's quiet period" : "outside the quiet period") "
+                        + "at \(where_)"
                 }
+                if r8Stop { r8AllowanceUses += 1 }
+            }
+            if !seeked {
                 let hidesNow = bannerUntil.map { clock >= $0 } ?? false
                 let expected: [SkipEffect] = hidesNow ? [.hideSkipped] : []
                 if effects != expected { return "effects \(effects), expected \(expected) at \(where_)" }
@@ -210,8 +255,9 @@ struct SplitMix64 {
                     if undone != [.seek(to: target), .hideSkipped] {
                         return "undo gave \(undone), expected seek to \(target) at \(where_)"
                     }
-                    suppressed.insert(skip.index)
+                    suppressed.formUnion(skip.chain)
                     quietUntil = undoClock + cfg.quietPeriod
+                    quietFromSkip = false
                     bannerUntil = nil
                     lastSkip = nil
                     position = target
@@ -231,7 +277,13 @@ struct SplitMix64 {
 
     /// Prompt mode, the same random cases: offers and withdrawals alternate, an offer is only ever
     /// for an eligible break whose skippable part holds the position, it is withdrawn on the first
-    /// tick the position is outside that part, and accepting it behaves like R2.
+    /// tick the position is outside that part, and accepting it behaves like R2, chaining included
+    /// (it lands at the landing point of the last break of the offered break's chain).
+    ///
+    /// Tightened with chaining: no offer is made while the quiet period started by an accepted
+    /// offer is running. R4 does not delay offers, so before chaining a break starting soon after
+    /// the landing was offered (and played) within it; now the accept jumps over every such break.
+    /// (This simulation never undoes, so no break is suppressed and R8 leaves no exception.)
     @Test func promptOffersAlternateWithWithdrawalsAndAreForTheBreakBeingPlayed() {
         for index in 0..<Self.caseCount {
             let seed = Self.baseSeed &+ 0x1_0000 &+ UInt64(index)
@@ -258,6 +310,7 @@ struct SplitMix64 {
         var position = Duration.zero
         var clock = Duration.zero
         var offered: Int?
+        var acceptQuietUntil: Duration?
         var step = 0
         while position <= c.total && step < 20_000 {
             step += 1
@@ -266,6 +319,11 @@ struct SplitMix64 {
             var where_: String { "step \(step), position \(p), clock \(clock); \(c)" }
             let effects = sut.tick(position: p, duration: c.duration, now: now)
                 .filter { $0 != .hideSkipped }
+            if let until = acceptQuietUntil, clock < until,
+                effects.contains(where: { if case .offerSkip = $0 { true } else { false } })
+            {
+                return "offered during an accepted offer's quiet period: \(effects) at \(where_)"
+            }
             if effects.contains(where: { if case .seek = $0 { true } else { false } }) {
                 return "prompt mode seeked by itself: \(effects) at \(where_)"
             }
@@ -288,15 +346,17 @@ struct SplitMix64 {
 
             if let o = offered, rng.oneIn(8) {
                 let accepted = sut.acceptOffer(position: p, now: now)
+                let last = chainLast(o, breaks: breaks, config: cfg) { guarded($0) }
                 let expectedAccept: [SkipEffect] = [
-                    .seek(to: landing(o)), .withdrawOffer,
-                    .showSkipped(skipped: landing(o) - p, undoUntil: now + cfg.undoWindow),
+                    .seek(to: landing(last)), .withdrawOffer,
+                    .showSkipped(skipped: landing(last) - p, undoUntil: now + cfg.undoWindow),
                 ]
                 if accepted != expectedAccept {
                     return "accept gave \(accepted), expected \(expectedAccept) at \(where_)"
                 }
                 offered = nil
-                position = landing(o)
+                acceptQuietUntil = clock + cfg.quietPeriod
+                position = landing(last)
             }
             if !rng.oneIn(10) { position += c.tick }
             clock += c.tick

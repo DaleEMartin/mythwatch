@@ -233,6 +233,205 @@ extension CommercialSkipper {
         #expect(sut.tick(s(60)) == [])
     }
 
+    // R2 Chaining (owner decision 2026-11-15). Defaults: landBeforeEnd 1 s, quietPeriod 3 s, so
+    // after landing at 119 a next break is chained when it starts before 122.
+
+    @Test func r2_chainedTwoBreaksUnderTheThresholdApartGiveOneSeekAndOneBanner() throws {
+        var sut = skipper([cb(60, 120), cb(ms(121_500), s(180))])
+        let effects = sut.play(from: s(59), to: s(200), clockStart: s(59))
+        // One skip at 60 (clock 60) to 179; the banner goes at clock 68 (position 186.75).
+        try #require(effects.map(\.position) == [s(60), ms(186_750)])
+        #expect(effects[0].effects == [
+            .seek(to: s(179)), .showSkipped(skipped: s(119), undoUntil: at(seconds: 68)),
+        ])
+        #expect(effects[1].effects == [.hideSkipped])
+    }
+
+    @Test func r2_chainedWhenTheNextBreakStartsJustBeforeTheQuietPeriodWouldEnd() {
+        // 122 - 1 ns < 119 + 3: entered 1 ns before the quiet period ends, so chained.
+        var sut = skipper([cb(s(60), s(120)), cb(s(122) - .nanoseconds(1), s(180))])
+        #expect(sut.tick(s(60)) == [
+            .seek(to: s(179)), .showSkipped(skipped: s(119), undoUntil: at(seconds: 68)),
+        ])
+    }
+
+    @Test func r2_chainedNotWhenTheNextBreakStartsExactlyAsTheQuietPeriodEnds() throws {
+        // 122 == 119 + 3: entered exactly when the quiet period ends (the skip's clock + 3 s), so
+        // R4 lets it be skipped at once on entry; no chaining, two skips. (In `play` the tick
+        // after a seek is one step later, so the second skip is at clock 63.25.)
+        var sut = skipper([cb(60, 120), cb(122, 180)])
+        let effects = sut.play(from: s(59), to: s(180), clockStart: s(59))
+        try #require(effects.map(\.position) == [s(60), s(122)])
+        #expect(effects[0].effects == [
+            .seek(to: s(119)), .showSkipped(skipped: s(59), undoUntil: at(seconds: 68)),
+        ])
+        #expect(effects[1].effects == [
+            .seek(to: s(179)), .showSkipped(skipped: s(57), undoUntil: at(ms(71_250))),
+        ])
+    }
+
+    @Test func r2_chainedThreeBreaksLandAfterTheThird() {
+        // From 179 the third break (181) is again under 179 + 3: re-evaluated from each landing.
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(181, 240), cb(400, 460)])
+        #expect(sut.tick(s(60)) == [
+            .seek(to: s(239)), .showSkipped(skipped: s(179), undoUntil: at(seconds: 68)),
+        ])
+    }
+
+    @Test func r2_chainedStopsAtAGapOfTheQuietPeriodOrMore() {
+        // 121 is chained (lands 179); 182 == 179 + 3 is not, nor is 250 (a long gap). Each later
+        // break gets its own skip on entry.
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(182, 240), cb(250, 300)])
+        let effects = sut.play(from: s(59), to: s(300), clockStart: s(59))
+        let seeks = effects.compactMap { entry -> Duration? in
+            if case .seek(let target)? = entry.effects.first { target } else { nil }
+        }
+        #expect(seeks == [s(179), s(239), s(299)])
+        #expect(effects.first { $0.effects.count == 2 && $0.position == s(182) } != nil)
+        #expect(effects.first { $0.effects.count == 2 && $0.position == s(250) } != nil)
+    }
+
+    @Test func r2_chainedStopsBeforeASuppressedBreakWhichThenPlays() throws {
+        // B 121..<180 is skipped on its own and undone, so it is suppressed. A 60..<120 is later
+        // skipped: the chain must stop before B (landing 119), and B plays in full.
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(400, 460)])
+        _ = sut.userSeeked(to: ms(120_500), now: at(seconds: 0))   // B armed
+        #expect(sut.tick(position: s(124), duration: longFile, now: at(seconds: 3)).first
+            == .seek(to: s(179)))
+        #expect(sut.undo(now: at(seconds: 4)) == [.seek(to: s(122)), .hideSkipped])
+        _ = sut.userSeeked(to: s(50), now: at(seconds: 10))
+        let effects = sut.play(from: s(50), to: s(401), clockStart: s(10))
+        try #require(effects.map(\.position) == [s(60), ms(126_750), s(400)])
+        #expect(effects[0].effects == [
+            .seek(to: s(119)), .showSkipped(skipped: s(59), undoUntil: at(seconds: 28)),
+        ])
+        #expect(effects[1].effects == [.hideSkipped])
+        #expect(effects[2].effects.first == .seek(to: s(459)))
+    }
+
+    @Test func r2_chainedStopsBeforeASuppressedBreakSoACloseBreakAfterItPlaysUntilTheQuietEnds() throws {
+        // The one gap chaining leaves (R8 beats R2): K 120.2..<121.4 is suppressed but N
+        // 121.5..<180 after it is not, which needs N to have been guarded when K's skip was undone
+        // (a recording that has since grown). A's skip stops before K and lands at 119; N is
+        // entered at clock 22.75, inside the quiet period, and is skipped when it ends at 23.
+        var sut = skipper([cb(60, 120), cb(ms(120_200), ms(121_400)), cb(ms(121_500), s(180)),
+            cb(400, 460)])
+        _ = sut.userSeeked(to: ms(120_100), now: at(seconds: 0))   // K armed
+        // File 185 s: N guarded (180 + 10 > 185), so K's skip does not chain it.
+        #expect(sut.tick(position: ms(120_200), duration: s(185), now: at(seconds: 3)).first
+            == .seek(to: ms(120_400)))
+        #expect(sut.undo(now: at(seconds: 4)) == [.seek(to: ms(118_200)), .hideSkipped])
+        _ = sut.userSeeked(to: s(50), now: at(seconds: 10))
+        let effects = sut.play(from: s(50), to: s(401), clockStart: s(10))   // now a long file
+        try #require(effects.map(\.position) == [s(60), ms(121_750), ms(186_750), s(400)])
+        #expect(effects[0].effects.first == .seek(to: s(119)))
+        #expect(effects[1].effects == [
+            .seek(to: s(179)), .showSkipped(skipped: ms(57_250), undoUntil: at(seconds: 31)),
+        ])
+    }
+
+    @Test func r2_chainedStopsBeforeABreakGuardedOnThisTick() {
+        // File 185 s: B 121..<180 is guarded (180 + 10 > 185), A is not (130 <= 185). The chain
+        // stops before B, which plays to its end.
+        var guarded = skipper([cb(60, 120), cb(121, 180)])
+        #expect(guarded.tick(s(60), duration: s(185)).first == .seek(to: s(119)))
+        let effects = guarded.play(from: s(119), to: s(185), clockStart: s(60), duration: s(185))
+        #expect(effects.map(\.position) == [s(127)])
+        #expect(effects.first?.effects == [.hideSkipped])
+        // The guard is this tick's: with a 200 s file B is not guarded and is chained.
+        var unguarded = skipper([cb(60, 120), cb(121, 180)])
+        #expect(unguarded.tick(s(60), duration: s(200)).first == .seek(to: s(179)))
+    }
+
+    @Test func r2_chainedOverAShortBreakOnlyWhenALaterBreakIsChained() {
+        // S 120.5..<121 is shorter than landBeforeEnd: no skippable part, so it is never a
+        // landing target. On its own it ends nothing: land at 119 and S plays.
+        var alone = skipper([cb(60, 120), cb(ms(120_500), ms(121_000)), cb(300, 360)])
+        #expect(alone.tick(s(60)).first == .seek(to: s(119)))
+        let effects = alone.play(from: s(119), to: s(301), clockStart: s(60))
+        #expect(effects.map(\.position) == [s(127), s(300)])   // the hide, then the next break
+        // With a break after it that is still under 119 + 3, the chain passes S and lands
+        // after that break, so nothing of either plays.
+        var passed = skipper([cb(60, 120), cb(ms(120_500), ms(121_000)), cb(ms(121_500), s(180))])
+        #expect(passed.tick(s(60)) == [
+            .seek(to: s(179)), .showSkipped(skipped: s(119), undoUntil: at(seconds: 68)),
+        ])
+    }
+
+    @Test func r2_chainedSkippedIsTheWholeDistanceFromTheOriginToTheFinalLanding() {
+        var sut = skipper([cb(60, 120), cb(121, 180)])
+        #expect(sut.tick(ms(60_250)) == [
+            .seek(to: s(179)), .showSkipped(skipped: ms(118_750), undoUntil: at(ms(68_250))),
+        ])
+    }
+
+    @Test func r2_chainedUndoSuppressesEveryChainedBreakSoAllOfThemPlay() {
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(181, 240), cb(400, 460)])
+        #expect(sut.tick(s(60)).first == .seek(to: s(239)))
+        // Back to the origin minus the rewind, as for a single skip.
+        #expect(sut.undo(now: at(seconds: 62)) == [.seek(to: s(58)), .hideSkipped])
+        // All three chained breaks play through, long after the quiet period; the unrelated
+        // break at 400 is still skipped.
+        let effects = sut.play(from: s(58), to: s(401), clockStart: s(62))
+        #expect(effects.map(\.position) == [s(400)])
+        #expect(effects.first?.effects.first == .seek(to: s(459)))
+        // Still suppressed after a seek back before them.
+        _ = sut.userSeeked(to: s(10), now: at(seconds: 500))
+        let again = sut.play(from: s(10), to: s(260), clockStart: s(500))
+        #expect(again.isEmpty)
+    }
+
+    @Test func r2_chainedAcceptedOfferInPromptModeLandsAfterTheGroup() throws {
+        // The offer names the first break only; pressing Skip once jumps the whole group.
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(400, 460)], mode: .prompt)
+        #expect(sut.tick(s(60)) == [.offerSkip(cb(60, 120))])
+        #expect(sut.acceptOffer(position: s(60), now: at(seconds: 60)) == [
+            .seek(to: s(179)), .withdrawOffer,
+            .showSkipped(skipped: s(119), undoUntil: at(seconds: 68)),
+        ])
+        let effects = sut.play(from: s(179), to: s(401), clockStart: s(60))
+        try #require(effects.map(\.position) == [s(187), s(400)])
+        #expect(effects[1].effects == [.offerSkip(cb(400, 460))])
+    }
+
+    @Test func r2_chainedAcceptedOfferStopsBeforeABreakGuardedOnTheLastTick() {
+        // acceptOffer has no duration of its own: the guard uses the most recent tick's.
+        var sut = skipper([cb(60, 120), cb(121, 180)], mode: .prompt)
+        #expect(sut.tick(s(60), duration: s(185)) == [.offerSkip(cb(60, 120))])
+        #expect(sut.acceptOffer(position: s(60), now: at(seconds: 60)).first == .seek(to: s(119)))
+    }
+
+    @Test func r2_chainedArmsTheFirstBreakAfterTheChain() throws {
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(200, 260)])
+        let effects = sut.play(from: s(59), to: s(201), clockStart: s(59))
+        try #require(effects.map(\.position) == [s(60), ms(186_750), s(200)])
+        #expect(effects[2].effects == [
+            .seek(to: s(259)), .showSkipped(skipped: s(59), undoUntil: at(ms(89_250))),
+        ])
+        // The chained-over break is not armed: even a report inside its skippable part after the
+        // quiet period (a slow engine) does not skip it again. Only the break at 200 is armed.
+        var late = skipper([cb(60, 120), cb(121, 180), cb(200, 260)])
+        #expect(late.tick(s(60)).first == .seek(to: s(179)))
+        #expect(late.tick(s(125), now: s(64)) == [])
+        #expect(late.tick(s(200), now: s(65)).first == .seek(to: s(259)))
+    }
+
+    @Test func r2_chainedStalePositionsInsideAnyChainedBreakDoNotSkipAgainOrOffer() {
+        var sut = skipper([cb(60, 120), cb(121, 180), cb(181, 240)])
+        #expect(sut.tick(position: ms(60_050), duration: longFile, now: at(seconds: 0)).first
+            == .seek(to: s(239)))
+        // The engine reports pre-seek and in-between positions for a moment: inside the first,
+        // second and third chained breaks, forwards and backwards, and the same tick twice.
+        for (position, clock) in [
+            (ms(60_050), 0), (ms(59_900), 250), (ms(60_200), 500), (s(125), 750),
+            (s(182), 1_000), (ms(60_300), 1_250), (s(130), 1_500),
+        ] {
+            #expect(sut.tick(position: position, duration: longFile, now: at(ms(clock))) == [])
+        }
+        let effects = sut.play(from: s(239), to: s(260), clockStart: ms(1_750))
+        #expect(effects.map(\.effects) == [[.hideSkipped]])
+    }
+
     // R3 Seeking into a break does not skip it
 
     @Test func r3_seekingIntoABreakPlaysIt() {
@@ -261,19 +460,18 @@ extension CommercialSkipper {
         ])
     }
 
-    @Test func r4_quietPeriodAfterASkipDelaysTheSkipOfABreakStartingSoonAfterTheLanding() {
-        // Documents the rule as written (see the property test): breaks 1 s apart. The first skip
-        // lands at 119 at clock 60, so the quiet period runs to clock 63. The position enters the
-        // second break at 121 (clock 62) and it plays until clock 63 (position 122), then is
-        // skipped. The viewer sees 1 s of the second commercial.
+    @Test func r4_aBreakThatWouldStartDuringTheSkipsQuietPeriodIsChainedSoNoneOfItPlays() {
+        // Breaks 1 s apart. Landing at 119 at clock 60 would enter the second break at 121
+        // (clock 62), inside the quiet period that runs to clock 63. R2's chaining lands after
+        // the second break instead: one seek, one banner, and no position in 121..<179 is ever
+        // played. Only the banner's hide follows, at clock 68 (position 187).
         var sut = skipper([cb(60, 120), cb(121, 180)])
-        #expect(sut.tick(position: s(60), duration: longFile, now: at(seconds: 60)).count == 2)
-        let effects = sut.play(from: s(119), to: s(185), clockStart: s(60))
-        #expect(effects.count == 1)
-        #expect(effects.first?.position == s(122))
-        #expect(effects.first?.effects == [
-            .seek(to: s(179)), .showSkipped(skipped: s(57), undoUntil: at(seconds: 71)),
+        #expect(sut.tick(position: s(60), duration: longFile, now: at(seconds: 60)) == [
+            .seek(to: s(179)), .showSkipped(skipped: s(119), undoUntil: at(seconds: 68)),
         ])
+        let effects = sut.play(from: s(179), to: s(200), clockStart: s(60))
+        #expect(effects.map(\.position) == [s(187)])
+        #expect(effects.first?.effects == [.hideSkipped])
     }
 
     @Test func r4_breakPassedEntirelyDuringTheQuietPeriodIsNotSkippedAfterIt() {
@@ -500,14 +698,19 @@ extension CommercialSkipper {
         #expect(sut.play(from: s(68), to: s(125), clockStart: s(72)).isEmpty)
     }
 
-    @Test func r9_acceptOfferStartsAQuietPeriodButItDoesNotDelayTheNextOffer() {
-        var sut = skipper([cb(60, 120), cb(120 + 1, 180)], mode: .prompt)
-        _ = sut.tick(s(60))
-        _ = sut.acceptOffer(position: s(60), now: at(seconds: 60))   // lands 119 at clock 60
-        let effects = sut.play(from: s(119), to: s(122), clockStart: s(60))
-        // Break 2 entered at 121, clock 62: inside the quiet period, offered anyway.
-        #expect(effects.map(\.position) == [s(121)])
-        #expect(effects.first?.effects == [.offerSkip(cb(121, 180))])
+    @Test func r9_quietPeriodAfterAnUndoDoesNotDelayTheNextOffer() {
+        // (Was: a break entered during the quiet period after an accepted offer is offered. With
+        // R2's chaining such a break is jumped over by the accept itself, so the case is shown
+        // with the other quiet period that can hold an eligible break: an undo's.)
+        // Breaks P 55..<59 and B 60..<120. Accept B at 60 (clock 60), undo at clock 61 with a 5 s
+        // rewind: back to 55, B suppressed, P armed (it starts at 55), quiet until clock 64.
+        // The very next tick, at 55 and clock 61, is inside P: offered at once.
+        var sut = skipper([cb(55, 59), cb(60, 120)], mode: .prompt, undoRewind: s(5))
+        _ = sut.userSeeked(to: ms(59_500), now: at(seconds: 59))
+        #expect(sut.tick(s(60)) == [.offerSkip(cb(60, 120))])
+        #expect(sut.acceptOffer(position: s(60), now: at(seconds: 60)).first == .seek(to: s(119)))
+        #expect(sut.undo(now: at(seconds: 61)) == [.seek(to: s(55)), .hideSkipped])
+        #expect(sut.tick(s(55), now: s(61)) == [.offerSkip(cb(55, 59))])
     }
 
     @Test func r9_quietPeriodAfterAUserSeekDoesNotDelayTheOffer() {
