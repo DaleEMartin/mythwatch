@@ -618,6 +618,7 @@ applied after trimming surrounding whitespace and newlines:
     public func connect() async                                    // reads settings, probes, builds the adapter
     public func makeLibraryModel() -> LibraryViewModel             // added by M2-5
     public func makeShowModel(_ show: Show) -> ShowViewModel       // added by M2-5
+    public func makeEpisodeDetailModel(_ recording: Recording) -> EpisodeDetailModel   // added by M2-5
     public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession   // added by M3-2
     public func makeSettingsModel() -> SettingsViewModel           // added by M2-6
 }
@@ -660,15 +661,93 @@ from the settings store, then:
 
 | View model | State | Actions |
 | --- | --- | --- |
-| `LibraryViewModel` | `library: Loadable<Library>` | `load()`, `refresh()`; reloads when the player closes |
-| `ShowViewModel` | `seasons: [Season]`, selected season | `toggleWatched(_:)`, `delete(_:)` |
-| `EpisodeDetailModel` | recording, `resumePosition: Duration?`, `bookmark: Duration?` | `load()`, start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
+| `LibraryViewModel` | `library: Loadable<Library>`, `isRefreshing`, `refreshProblem: UserMessage?` | `load()`, `refresh()`, `reloadAfterPlayback()`, `apply(_ change: RecordingChange)` |
+| `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:)`, `dismissProblem()` |
+| `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?` | `load()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
 | `SettingsViewModel` | editable `AppSettings`, `connectionTest: Loadable<BackendInfo>`, `adapterName: String?`, discovered backends | `testConnection()`, `save()`, `select(_ discovered:)` |
 | `OnboardingViewModel` | address text, discovered backends, test state | `connect()` |
+
+```swift
+LibraryViewModel(recordings: any RecordingsService)
+ShowViewModel(show: Show, recordings: any RecordingsService, onChange: (@MainActor (RecordingChange) -> Void)? = nil)
+EpisodeDetailModel(recording: Recording, state: any PlaybackStateService)
+// toggleWatched(_:) and delete(_:) are `@discardableResult` and return Task<Void, Never>
+public enum RecordingChange: Sendable, Equatable { case watched(RecordingID, Bool); case deleted(RecordingID) }
+public struct StartOption: Identifiable, Sendable, Equatable {   // ready to render
+    public var point: StartPoint; public var title: String; public var position: Duration?; public var id: String
+}
+```
 
 After a write (`toggleWatched`, `delete`), update local state optimistically and roll back with a
 `UserMessage` on failure. Delete removes the recording from the library immediately; the backend
 deletes asynchronously, so a refresh shortly after must also filter `deletePending`.
+
+All text a view shows comes from `UserMessage(error)` (anything that is not a `BackendError` gives
+`UserMessage.unexpected`) or from a label table kept in one place (`EpisodeLabels`). Models name
+intent (`select(season:)`), never a remote gesture. A model takes the service protocols it needs,
+not the adapter. The factory methods on `AppModel` need a loaded session; asking for a model
+without one is a programmer error and traps (`preconditionFailure`).
+
+**Library rules** (`LibraryViewModel`)
+
+- `load()` fetches when nothing is loaded (idle or failed): `.loading`, then `.loaded` (built with
+  `LibraryBuilder.build`) or `.failed(UserMessage)`; `canRetry` is the message's. When a library is
+  already loaded `load()` does nothing, so a view that reappears does not fetch again.
+- `refresh()` always fetches. With content on screen the content stays visible and `isRefreshing`
+  is true; success replaces it. A failed refresh keeps the old library and sets `refreshProblem`
+  (the view may show a banner); `refreshProblem` clears when the next fetch starts. A failed
+  first load or retry is `.failed` (there is no content to keep).
+- One fetch at a time. A `load()` or `refresh()` made while one runs joins it and returns when it
+  finishes, so nothing is fetched twice and an older answer cannot overwrite a newer one.
+- `reloadAfterPlayback()` is `refresh()` under the name the player screen calls when it closes.
+  It is a method, not a subscription: the model knows nothing about the player.
+- Cancellation (also `EpisodeDetailModel.load()`): the fetch belongs to the model and is cancelled
+  only when every caller waiting for it has been cancelled. A cancelled fetch publishes nothing, so
+  no message is shown (`URLSessionTransport` reports cancellation as `.unreachable`), and the model
+  returns at once to the state it had before the fetch: `.idle` after a cancelled first load, the
+  old content after a cancelled refresh, the old failure after a cancelled retry.
+
+**Show rules** (`ShowViewModel`)
+
+- `seasons` is `LibraryBuilder.seasons(of: show)`. The first season is selected until
+  `select(season:)` picks another (a season the show does not have is ignored). If the selected
+  season no longer exists, `selectedSeason` is the first season left, and the old selection returns
+  if the season does. `selectedSeason` is nil only when the show has no recordings.
+- `isEmpty` is true when the show has no recordings left (every one deleted, optimistically or for
+  good): the view should close. `show` keeps its title and poster. A failed delete of the last
+  recording makes `isEmpty` false again.
+- `toggleWatched(_:)` and `delete(_:)` change local state before the call returns and return a task
+  that ends when the write has; a view may ignore it. A write is never cancelled by its caller.
+  A failed write restores the state and sets `problem` (a message, never raw error text); `problem`
+  clears when the next write starts or on `dismissProblem()`.
+- Watched writes to one recording are sent one at a time. A toggle made while a write is in flight
+  waits for it and is then sent only if the backend's last confirmed state differs from what is
+  wanted (on, off, on sends one write). A failed write returns the screen to the last
+  confirmed state; an earlier failure never undoes a later toggle, and a later failure never
+  rolls back past an earlier success. Writes to different recordings do not wait for each other.
+- `delete(_:)` sends `RecordingsService.delete(id:allowRerecord: false)`. The model has no
+  confirmation state: `askBeforeDelete` is the view's concern. A failed delete puts the recording
+  back in its place (newest first) with any watched change made meanwhile.
+- Consistency: after each *successful* write the show model calls its `onChange` closure with a
+  `RecordingChange`. `AppModel.makeShowModel` wires it to the newest library model made by
+  `makeLibraryModel()` (held weakly), which `apply`s the change to its recordings and rebuilds the
+  library with `LibraryBuilder.build` at once: counts, shelves and the show's presence are right
+  when the user goes back, with no fetch. A fetch already running when a change is applied predates
+  it, so its answer is dropped and the list is fetched again. Failed and rolled-back writes are not
+  reported.
+
+**Episode detail rules** (`EpisodeDetailModel`)
+
+- `load()` fetches the resume position and the bookmark at the same time. `startOptions` are, in
+  order: Resume (when there is a resume position), Play from Bookmark (when there is a bookmark),
+  Play from Beginning (always, including before `load()` and after a failed fetch). A position of
+  zero or less counts as none; there is no other threshold (`minimumResumePosition` belongs to
+  `PlaybackSession`).
+- If one fetch fails the other's result is still used. The failure is shown: `problem` holds the
+  message (the first failure's when both fail) and clears when the next load starts. A failed
+  load keeps what an earlier load found.
+- Labels are "Resume from 12:34", "Play from Bookmark at 1:02:03" (whole seconds; hours only from
+  one hour) and "Play from Beginning", built in `EpisodeLabels`.
 
 ## 7. App target (`Mythwatch`)
 

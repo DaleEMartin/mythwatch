@@ -48,6 +48,10 @@ public struct BackendSession: Sendable {
     @ObservationIgnored let discovery: any BackendDiscovery
     @ObservationIgnored let now: @MainActor () -> ContinuousClock.Instant
 
+    /// The newest library model made by `makeLibraryModel()`, held weakly: show models report
+    /// their writes to it so the library is right when the user goes back.
+    @ObservationIgnored private weak var libraryModel: LibraryViewModel?
+
     @ObservationIgnored private var attempt: Attempt?
     @ObservationIgnored private var lastAttemptID = 0
     /// The address `session` was loaded from, while it is `.loaded`.
@@ -99,6 +103,38 @@ public struct BackendSession: Sendable {
         }
         attempt = Attempt(id: id, connection: connection, task: task)
         await task.value
+    }
+
+    // MARK: View-model factories
+
+    /// The adapter of the loaded session. The screens only exist once a session is loaded, so
+    /// asking for a model without one is a programmer error and stops the app (the signatures
+    /// are non-optional and non-throwing, SPEC 6.3).
+    private var sessionAdapter: any BackendAdapter {
+        guard let adapter = session.value?.adapter else {
+            preconditionFailure("AppModel: a view model was requested before the session was loaded")
+        }
+        return adapter
+    }
+
+    /// The Recordings screen's model. Needs a loaded session.
+    public func makeLibraryModel() -> LibraryViewModel {
+        let model = LibraryViewModel(recordings: sessionAdapter.recordings)
+        libraryModel = model
+        return model
+    }
+
+    /// A show page's model. Needs a loaded session. Its successful writes are applied to the
+    /// newest library model made by `makeLibraryModel()`, if that is still alive.
+    public func makeShowModel(_ show: Show) -> ShowViewModel {
+        ShowViewModel(
+            show: show, recordings: sessionAdapter.recordings,
+            onChange: { [weak libraryModel] change in libraryModel?.apply(change) })
+    }
+
+    /// An episode detail page's model. Needs a loaded session.
+    public func makeEpisodeDetailModel(_ recording: Recording) -> EpisodeDetailModel {
+        EpisodeDetailModel(recording: recording, state: sessionAdapter.playbackState)
     }
 
     private func cancelAttempt() {

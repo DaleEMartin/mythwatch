@@ -59,7 +59,12 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   put to the owner for review), `AppModel.connect()` with the "Connection flow" rules in SPEC
   §6.3, `ConnectedBackend` returned by the connector, and the `PlayerEngine` declarations.
   `.idle` means "not connected and not connecting", so the Root view decides Onboarding from
-  settings, not from `.idle`. Next: **M2-5**, then **M2-6**.
+  settings, not from `.idle`.
+- **M2-5 done and committed** (2026-11-14): `LibraryViewModel`, `ShowViewModel`,
+  `EpisodeDetailModel`, the `AppModel` factories, `StartPoint`. Rules are in SPEC §6.4. Open
+  for later tasks: `EpisodeDetailModel` has no delete although SPEC §7 puts a Delete button on
+  that page (settle in M2-7 or M5-1); `ShowViewModel.delete` always sends
+  `allowRerecord: false` (ask the owner in M5-1). Next: **M2-6**.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
