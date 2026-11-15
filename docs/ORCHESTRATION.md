@@ -98,8 +98,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   after every break that would start during its quiet period; undo suppresses the whole chain.
   Told to the owner: programme in gaps under 2 s between chained breaks is skipped too.
 - **M4-2 done and committed** (2026-11-15): the skipper is wired into `PlaybackSession` (SPEC
-  §5.2 "Commercials"); 27 mutations checked. Package tests, the tvOS app UI test, the iOS
-  package build and the live read-only suite were all re-run after it and pass.
+  §5.2 "Commercials"); 27 mutations checked. Package tests, the tvOS app UI test and the iOS
+  package build were re-run after it and pass. The live read-only suite was re-run and one
+  check failed for a reason unrelated to M4-2: while a recording is in progress, the list
+  reports `INUSERECORDING` and status "Recording" for it but `GetRecorded` does not (seen on
+  id 3753, 2026-11-15). A follow-up corrects `BACKEND-V35.md` and the live test.
   For M4-3: the view must hide the skipped banner when its own clock passes `undoUntil`
   (no ticks arrive while paused); all banner wording is M4-3's.
   For M0-3, in addition to the earlier questions: does VLC report `.playing` / `.buffering` at
