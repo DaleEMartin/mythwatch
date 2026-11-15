@@ -104,14 +104,17 @@ public struct AdapterRegistry: Sendable {
 }
 
 /// What `BackendConnector.connect` produces: the probed info and the adapter made for it, so a
-/// caller that needs the host name does not probe a second time.
+/// caller that needs the host name does not probe a second time. `adapterName` is the `name` of
+/// the factory that made the adapter ("MythTV v35"), for screens that say what Mythwatch is using.
 public struct ConnectedBackend: Sendable {
     public let info: BackendInfo
     public let adapter: any BackendAdapter
+    public let adapterName: String
 
-    public init(info: BackendInfo, adapter: any BackendAdapter) {
+    public init(info: BackendInfo, adapter: any BackendAdapter, adapterName: String) {
         self.info = info
         self.adapter = adapter
+        self.adapterName = adapterName
     }
 }
 
@@ -129,6 +132,6 @@ public struct BackendConnector: Sendable {
         let info = try await BackendProbe(transport: transport).probe(connection)
         let factory = try registry.factory(for: info.version)
         let adapter = factory.makeAdapter(connection: connection, version: info.version, transport: transport)
-        return ConnectedBackend(info: info, adapter: adapter)
+        return ConnectedBackend(info: info, adapter: adapter, adapterName: factory.name)
     }
 }

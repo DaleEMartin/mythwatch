@@ -4,14 +4,17 @@ import MythwatchDomain
 import MythwatchPlayback
 import Observation
 
-/// A connected backend: what the probe found and the adapter made for it.
+/// A connected backend: what the probe found, the adapter made for it, and the name of the
+/// adapter's factory ("MythTV v35").
 public struct BackendSession: Sendable {
     public let info: BackendInfo
     public let adapter: any BackendAdapter
+    public let adapterName: String
 
-    public init(info: BackendInfo, adapter: any BackendAdapter) {
+    public init(info: BackendInfo, adapter: any BackendAdapter, adapterName: String) {
         self.info = info
         self.adapter = adapter
+        self.adapterName = adapterName
     }
 }
 
@@ -137,6 +140,24 @@ public struct BackendSession: Sendable {
         EpisodeDetailModel(recording: recording, state: sessionAdapter.playbackState)
     }
 
+    /// The Settings screen's model. Needs no session: the screen is reachable while the backend
+    /// is down. Saving a changed backend makes this `AppModel` connect again.
+    public func makeSettingsModel() -> SettingsViewModel {
+        SettingsViewModel(
+            settings: settings, connector: connector, discovery: discovery,
+            session: { [weak self] in self?.session ?? .idle },
+            reconnect: { [weak self] in await self?.connect() })
+    }
+
+    /// The first-run screen's model. Needs no session (there is none yet). Connecting makes this
+    /// `AppModel` connect from the settings it saves.
+    public func makeOnboardingModel() -> OnboardingViewModel {
+        OnboardingViewModel(
+            settings: settings, connector: connector, discovery: discovery,
+            session: { [weak self] in self?.session ?? .idle },
+            reconnect: { [weak self] in await self?.connect() })
+    }
+
     private func cancelAttempt() {
         attempt?.task.cancel()
         attempt = nil
@@ -151,7 +172,10 @@ public struct BackendSession: Sendable {
         switch outcome {
         case .success(let connected):
             sessionConnection = connection
-            session = .loaded(BackendSession(info: connected.info, adapter: connected.adapter))
+            session = .loaded(
+                BackendSession(
+                    info: connected.info, adapter: connected.adapter,
+                    adapterName: connected.adapterName))
         case .failure(let error):
             sessionConnection = nil
             session = .failed((error as? BackendError).map(UserMessage.init) ?? .unexpected)

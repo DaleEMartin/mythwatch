@@ -64,7 +64,15 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `EpisodeDetailModel`, the `AppModel` factories, `StartPoint`. Rules are in SPEC §6.4. Open
   for later tasks: `EpisodeDetailModel` has no delete although SPEC §7 puts a Delete button on
   that page (settle in M2-7 or M5-1); `ShowViewModel.delete` always sends
-  `allowRerecord: false` (ask the owner in M5-1). Next: **M2-6**.
+  `allowRerecord: false` (ask the owner in M5-1).
+- **M2-6 done and committed** (2026-11-14): `SettingsViewModel`, `OnboardingViewModel`, their
+  `AppModel` factories, `adapterName` on `ConnectedBackend` / `BackendSession`. Rules in SPEC
+  §6.4. For M2-7: a failed onboarding connect keeps the saved address, so Root must keep the
+  Onboarding screen up until `connectState` is `.loaded`; Settings should auto-save on exit
+  when `canSave`. The tvOS app build and UI test were re-run after this task and pass.
+  **Milestone 2 is complete except M2-7 (UI), which needs the owner.**
+  Next without the owner: **M4-1** (pure skipper), then M3-1, M3-2, M4-2. These do not need
+  VLCKit, but M0-3 may change `PlayerEngine` (SPEC §5); if it does, M3-1/M3-2 need a follow-up.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

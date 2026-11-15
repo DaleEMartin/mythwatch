@@ -257,6 +257,24 @@ private func infoFixture() throws -> Data {
         #expect(t.requests.map(\.url.path) == ["/Myth/GetBackendInfo", "/Myth/GetHostName"])
     }
 
+    @Test func reportsTheNameOfTheFactoryThatMadeTheAdapter() async throws {
+        let t = FixtureTransport()
+        t.stub(.get, path: "/Myth/GetBackendInfo", body: try infoFixture())
+        var registry = AdapterRegistry()
+        registry.register(StubFactory(name: "MythTV v34", majors: [34]))
+        registry.register(StubFactory(name: "MythTV v35", majors: [35]))
+        let connected = try await BackendConnector(registry: registry, transport: t).connect(connection)
+        #expect(connected.adapterName == "MythTV v35")
+    }
+
+    @Test func connectedBackendCarriesTheNameItIsGiven() {
+        let adapter = FakeBackendAdapter()
+        let connected = ConnectedBackend(
+            info: BackendInfo(version: adapter.version, hostName: nil), adapter: adapter,
+            adapterName: "Some name")
+        #expect(connected.adapterName == "Some name")
+    }
+
     @Test func unsupportedVersionSurfacesUnchanged() async throws {
         let t = FixtureTransport()
         t.stub(.get, path: "/Myth/GetBackendInfo", body: try infoFixture())

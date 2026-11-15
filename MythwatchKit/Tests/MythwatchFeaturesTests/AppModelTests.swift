@@ -4,152 +4,12 @@ import MythwatchDomain
 import MythwatchFeatures
 import MythwatchPlayback
 import MythwatchTestSupport
-import Synchronization
 import Testing
-
-// MARK: - Probe replies
-
-// `BackendProbe`'s two version-neutral endpoints and the one key path it reads (SPEC §4). These
-// tests drive the real probe through the real connector, so they have to answer it.
-private let infoPath = "/Myth/GetBackendInfo"
-private let hostNamePath = "/Myth/GetHostName"
-
-private func backendAnswering(version: String, hostName: String) -> FixtureTransport {
-    let t = FixtureTransport()
-    t.stub(.get, path: infoPath, body: #"{"BackendInfo": {"Build": {"Version": "\#(version)"}}}"#)
-    t.stub(.get, path: hostNamePath, body: #"{"String": "\#(hostName)"}"#)
-    return t
-}
 
 private let alpha = BackendConnection(baseURL: URL(string: "http://alpha:6544")!)
 private let beta = BackendConnection(baseURL: URL(string: "http://beta:6544")!)
 private let v35 = BackendVersion(major: 35, minor: 0, raw: "v35.0")
 private let v36 = BackendVersion(major: 36, minor: 0, raw: "v36.0")
-
-// MARK: - A transport that can hold a request open
-
-/// An `HTTPTransport` for these tests: answers each host from its own `FixtureTransport`, and
-/// can park the next request to a host until the test releases it. Built on the same
-/// continuation pattern as `FakeCallRecorder` (SPEC §8): nothing sleeps, yields or polls.
-///
-/// Cancelling a parked request's task behaves like `URLSessionTransport` (it throws
-/// `.unreachable`, SPEC §4) unless the request was parked with `.keepParked`, which ignores
-/// cancellation so a test can deliver a stale answer after a newer one.
-private final class ParkingTransport: HTTPTransport {
-    enum OnCancel: Sendable { case throwUnreachable, keepParked }
-
-    private struct Parked {
-        let id: Int
-        let host: String
-        let continuation: CheckedContinuation<Void, any Error>
-    }
-
-    private struct Waiter {
-        let host: String?
-        let count: Int
-        let continuation: CheckedContinuation<Void, Never>
-    }
-
-    private struct State {
-        var parkNext: [String: OnCancel] = [:]
-        var parked: [Parked] = []
-        var waiters: [Waiter] = []
-        var requests: [HTTPRequest] = []
-        var cancelledBeforeParking: Set<Int> = []
-        var cancelledCount = 0
-        var nextID = 0
-    }
-
-    private let hosts: [String: FixtureTransport]
-    private let state = Mutex(State())
-
-    init(_ hosts: [String: FixtureTransport]) { self.hosts = hosts }
-
-    var requests: [HTTPRequest] { state.withLock { $0.requests } }
-    var probeCount: Int { requests.filter { $0.url.path == infoPath }.count }
-    /// How many parked requests were ended by cancelling their task.
-    var cancelledCount: Int { state.withLock { $0.cancelledCount } }
-
-    /// Park the next request to `host` until it is released.
-    func parkNext(_ host: String, onCancel: OnCancel = .throwUnreachable) {
-        state.withLock { $0.parkNext[host] = onCancel }
-    }
-
-    /// Returns once at least `count` requests (to `host`, or to any host) are parked.
-    func waitForParked(_ count: Int = 1, host: String? = nil) async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let ready = state.withLock { s -> Bool in
-                if Self.parkedCount(s, host) >= count { return true }
-                s.waiters.append(Waiter(host: host, count: count, continuation: continuation))
-                return false
-            }
-            if ready { continuation.resume() }
-        }
-    }
-
-    /// Let the oldest parked request to `host` continue to its fixture, or throw `error` instead.
-    @discardableResult
-    func releaseNext(_ host: String, throwing error: (any Error)? = nil) -> Bool {
-        let found = state.withLock { s -> Parked? in
-            guard let i = s.parked.firstIndex(where: { $0.host == host }) else { return nil }
-            return s.parked.remove(at: i)
-        }
-        guard let found else { return false }
-        if let error { found.continuation.resume(throwing: error) } else { found.continuation.resume() }
-        return true
-    }
-
-    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-        let host = request.url.host ?? ""
-        let park = state.withLock { s -> (id: Int, mode: OnCancel)? in
-            s.requests.append(request)
-            guard let mode = s.parkNext.removeValue(forKey: host) else { return nil }
-            s.nextID += 1
-            return (s.nextID, mode)
-        }
-        if let park { try await self.park(id: park.id, host: host, onCancel: park.mode) }
-        guard let fixture = hosts[host] else { throw BackendError.unreachable("no fixture for \(host)") }
-        return try await fixture.send(request)
-    }
-
-    private static func parkedCount(_ s: State, _ host: String?) -> Int {
-        s.parked.filter { host == nil || $0.host == host }.count
-    }
-
-    private func park(id: Int, host: String, onCancel: OnCancel) async throws {
-        let cancelled = BackendError.unreachable("cancelled")  // what URLSessionTransport throws
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-                let outcome = state.withLock { s -> (cancelled: Bool, wake: [Waiter]) in
-                    if s.cancelledBeforeParking.remove(id) != nil { return (true, []) }
-                    s.parked.append(Parked(id: id, host: host, continuation: continuation))
-                    var wake: [Waiter] = []
-                    var remaining: [Waiter] = []
-                    for waiter in s.waiters {
-                        if Self.parkedCount(s, waiter.host) >= waiter.count {
-                            wake.append(waiter)
-                        } else {
-                            remaining.append(waiter)
-                        }
-                    }
-                    s.waiters = remaining
-                    return (false, wake)
-                }
-                if outcome.cancelled { continuation.resume(throwing: cancelled) }
-                for waiter in outcome.wake { waiter.continuation.resume() }
-            }
-        } onCancel: {
-            guard onCancel == .throwUnreachable else { return }
-            let found = state.withLock { s -> Parked? in
-                s.cancelledCount += 1
-                if let i = s.parked.firstIndex(where: { $0.id == id }) { return s.parked.remove(at: i) }
-                s.cancelledBeforeParking.insert(id)
-                return nil
-            }
-            found?.continuation.resume(throwing: cancelled)
-        }
-    }
-}
 
 private struct Oddity: Error, CustomStringConvertible {
     var description: String { "DIAG-oddity: something no adapter should throw" }
@@ -224,6 +84,7 @@ struct AppModelTests {
         let session = try #require(h.session)
         #expect(session.info == BackendInfo(version: v35, hostName: "alpha-host"))
         #expect(session.info.version.raw == "v35.0")
+        #expect(session.adapterName == "Fake 35")
         #expect(h.adapter === h.factory35.adapter)
         #expect(h.factory35.makeRequests == [.init(connection: alpha, version: v35)])
         #expect(h.transport.probeCount == 1)

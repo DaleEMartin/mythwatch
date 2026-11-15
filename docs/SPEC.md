@@ -242,7 +242,10 @@ public struct BackendProbe: Sendable {
     public func probe(_ connection: BackendConnection) async throws -> BackendInfo
 }
 
-public struct ConnectedBackend: Sendable { public let info: BackendInfo; public let adapter: any BackendAdapter }
+public struct ConnectedBackend: Sendable {
+    public let info: BackendInfo; public let adapter: any BackendAdapter
+    public let adapterName: String      // the factory's `name`, "MythTV v35"
+}  // public init(info:adapter:adapterName:)
 
 public struct BackendConnector: Sendable {                      // probe + resolve + make
     public init(registry: AdapterRegistry, transport: any HTTPTransport)
@@ -251,7 +254,8 @@ public struct BackendConnector: Sendable {                      // probe + resol
 ```
 
 `connect` returns the probed `BackendInfo` with the adapter (changed in M2-4), so a caller that
-needs the host name never probes a second time. `ConnectedBackend` lives here rather than in
+needs the host name never probes a second time. It also returns the `name` of the factory that
+made the adapter as `adapterName` (added in M2-6), for screens that say what Mythwatch is using. `ConnectedBackend` lives here rather than in
 `MythwatchFeatures` because the connector cannot depend on that target; `AppModel` copies it into
 a `BackendSession`.
 
@@ -621,8 +625,9 @@ applied after trimming surrounding whitespace and newlines:
     public func makeEpisodeDetailModel(_ recording: Recording) -> EpisodeDetailModel   // added by M2-5
     public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession   // added by M3-2
     public func makeSettingsModel() -> SettingsViewModel           // added by M2-6
+    public func makeOnboardingModel() -> OnboardingViewModel       // added by M2-6
 }
-public struct BackendSession: Sendable { let info: BackendInfo; let adapter: any BackendAdapter }   // public init(info:adapter:)
+public struct BackendSession: Sendable { let info: BackendInfo; let adapter: any BackendAdapter; let adapterName: String }   // public init(info:adapter:adapterName:)
 
 public protocol BackendDiscovery: Sendable { func discover() -> AsyncStream<[DiscoveredBackend]> }
 public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; name: String; connection: BackendConnection }
@@ -630,6 +635,11 @@ public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; 
 
 The app target builds exactly one `AppModel` with production implementations. Tests build it
 with fakes. This is the only place concrete types are chosen.
+
+`makeSettingsModel()` and `makeOnboardingModel()` give the new model the app's settings store,
+connector and discovery, and two closures over the `AppModel` (held weakly, so a model never keeps
+the app model alive): the current `session` and `connect()`. A model reaches the app model only
+through those.
 
 **Connection flow** (`AppModel.connect()`, built in M2-4). `init` does nothing: `session` starts
 `.idle` and settings are not read until `connect()`. Each `connect()` reads the backend address
@@ -664,13 +674,16 @@ from the settings store, then:
 | `LibraryViewModel` | `library: Loadable<Library>`, `isRefreshing`, `refreshProblem: UserMessage?` | `load()`, `refresh()`, `reloadAfterPlayback()`, `apply(_ change: RecordingChange)` |
 | `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:)`, `dismissProblem()` |
 | `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?` | `load()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
-| `SettingsViewModel` | editable `AppSettings`, `connectionTest: Loadable<BackendInfo>`, `adapterName: String?`, discovered backends | `testConnection()`, `save()`, `select(_ discovered:)` |
-| `OnboardingViewModel` | address text, discovered backends, test state | `connect()` |
+| `SettingsViewModel` | `addressText`, `commercialSkipMode`, `skipForwardSeconds`, `skipBackwardSeconds`, `deinterlace`, `askBeforeDelete` (all editable); `connectionTest: Loadable<BackendInfo>`, `backendInfo`, `adapterName: String?`, `addressHint`, `discovered`, `canTestConnection`, `canSave`, `hasUnsavedChanges`, `isReconnecting`, `reconnectProblem: UserMessage?`, `editedSettings: AppSettings?` | `testConnection()`, `save()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
+| `OnboardingViewModel` | `addressText` (editable); `connectionTest`, `connectState: Loadable<BackendInfo>`, `adapterName`, `addressHint`, `discovered`, `canTestConnection`, `canConnect`, `isConnecting` | `testConnection()`, `connect()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
 
 ```swift
 LibraryViewModel(recordings: any RecordingsService)
 ShowViewModel(show: Show, recordings: any RecordingsService, onChange: (@MainActor (RecordingChange) -> Void)? = nil)
 EpisodeDetailModel(recording: Recording, state: any PlaybackStateService)
+SettingsViewModel(settings: any SettingsStore, connector: BackendConnector, discovery: any BackendDiscovery,
+                  session: @MainActor () -> Loadable<BackendSession>, reconnect: @MainActor () async -> Void)
+OnboardingViewModel(...)   // the same five parameters
 // toggleWatched(_:) and delete(_:) are `@discardableResult` and return Task<Void, Never>
 public enum RecordingChange: Sendable, Equatable { case watched(RecordingID, Bool); case deleted(RecordingID) }
 public struct StartOption: Identifiable, Sendable, Equatable {   // ready to render
@@ -686,7 +699,8 @@ All text a view shows comes from `UserMessage(error)` (anything that is not a `B
 `UserMessage.unexpected`) or from a label table kept in one place (`EpisodeLabels`). Models name
 intent (`select(season:)`), never a remote gesture. A model takes the service protocols it needs,
 not the adapter. The factory methods on `AppModel` need a loaded session; asking for a model
-without one is a programmer error and traps (`preconditionFailure`).
+without one is a programmer error and traps (`preconditionFailure`). The exceptions are
+`makeSettingsModel()` and `makeOnboardingModel()`: those screens exist before and without a session.
 
 **Library rules** (`LibraryViewModel`)
 
@@ -748,6 +762,84 @@ without one is a programmer error and traps (`preconditionFailure`).
   load keeps what an earlier load found.
 - Labels are "Resume from 12:34", "Play from Bookmark at 1:02:03" (whole seconds; hours only from
   one hour) and "Play from Beginning", built in `EpisodeLabels`.
+
+**Address rules** (`SettingsViewModel` and `OnboardingViewModel`)
+
+- **Address text.** The field's text is read with `BackendAddress.parse`. A blank text (only
+  whitespace) is *empty*; text that is not blank and does not parse is *invalid*; anything else is
+  *valid*. Two texts that parse to the same `BackendConnection` are the same backend (`host` and
+  `http://host:6544`). `addressHint` is the plain-English line "That doesn't look like an address.
+  Try something like 192.168.1.20 or mybackend.local." for invalid text, and nil for valid and
+  empty text; it is built in `SetupLabels`. `canTestConnection` is true only for valid text.
+- **Test connection.** `testConnection()` does nothing unless the address is valid. Otherwise
+  `connectionTest` goes `.loading`, then `.loaded(BackendInfo)` or `.failed(UserMessage)` (any
+  error other than a `BackendError` gives `UserMessage.unexpected`; an unsupported version gives
+  the message that names the version). It probes and resolves an adapter for the address *as
+  typed* with the injected `BackendConnector` (the models never build a transport), saves nothing
+  and does not touch `AppModel.session`. Every call probes again.
+- **Editing clears the result.** When the typed text comes to mean a different backend (or
+  stops being valid, or is emptied) the test in flight is cancelled and `connectionTest` returns to
+  `.idle`; a test result is never shown next to an address it was not run for. Another spelling of
+  the same backend keeps the result.
+- **One test at a time.** A test started for the address already being tested joins it (one probe).
+  A test for another address cancels the one in flight, and only the newest test publishes, even if
+  the older probe answers last. A test belongs to the model, not to its caller: cancelling the caller
+  does not cancel it. A cancelled test publishes nothing (no error from the `.unreachable`
+  `URLSessionTransport` reports for a cancelled request), and a test still running when the model is
+  released is cancelled.
+- **Adapter name.** After a successful test, `adapterName` is the factory's name for the tested
+  backend. Settings also shows the live session's `adapterName` and `info` (`backendInfo`) while the
+  typed address is the saved backend and `AppModel.session` is loaded; a test result takes over from
+  it and clearing the test brings it back.
+- **Discovery.** `startDiscovery()` opens one `BackendDiscovery.discover()` stream (calling it
+  again while listening does nothing) and `discovered` holds the latest list. `stopDiscovery()` cancels
+  the stream and empties `discovered`; later lists are ignored. The view calls them from its appear
+  and disappear hooks. A model that is released stops listening. `select(_:)` fills `addressText`
+  with the backend and does nothing else (nothing is tested, saved or connected). The text is
+  `host:port` for http and `https://host:port` for https, so it parses back to the same
+  `BackendConnection`.
+
+**Settings rules** (`SettingsViewModel`)
+
+- The model starts from `SettingsStore.load()`; `addressText` shows the saved backend (empty when
+  there is none). Edits stay in the model until `save()`; nothing is written per field.
+- `skipForwardSeconds` / `skipBackwardSeconds` accept only `AppSettings.skipForwardChoices` /
+  `skipBackwardChoices` (also on the model as `SettingsViewModel.skipForwardChoices` /
+  `skipBackwardChoices`); any other value is ignored and the old one stays.
+- An empty address means "no backend": it is saveable (it disconnects) but cannot be tested.
+  An invalid address cannot be saved.
+- `editedSettings` is the edits as an `AppSettings` (nil while the address is invalid).
+  `hasUnsavedChanges` is true when it differs from what is saved, or when the address is invalid.
+  `canSave` is true only when `editedSettings` exists and differs from what is saved, so Save is off
+  when nothing changed. Recommendation for the UI: save when the user leaves the screen if `canSave`
+  (a TV has no Cancel), and show the hint when the address is invalid.
+- `save()` does nothing unless `canSave`. Otherwise it stores `editedSettings` through the
+  `SettingsStore`, tidies the address text to the stored form, and, only if the backend changed
+  (compared as parsed `BackendConnection`s, so spelling does not count, and including set,
+  changed and cleared), calls `reconnect` (wired by the factory to `AppModel.connect()`) after the
+  store holds the new value, and returns when it finishes. A change to playback or commercial settings
+  alone never reconnects. While reconnecting `isReconnecting` is true; afterwards `reconnectProblem`
+  holds the app's failure message (nil on success) until the next save starts. The screen shows
+  what the save did through `hasUnsavedChanges`, `isReconnecting` and `reconnectProblem`.
+
+**Onboarding rules** (`OnboardingViewModel`)
+
+- `canConnect` is true only for a valid address and not while connecting. `connect()` does nothing
+  otherwise.
+- `connect()` loads the settings, sets `backend` (every other setting is kept), saves them, then calls
+  `reconnect` (`AppModel.connect()`, which reads the settings) and reports through `connectState`:
+  `.loading` while connecting, then `.loaded(BackendInfo)` (done; the screen can move on and
+  `adapterName` is the live session's), `.failed(UserMessage)` with the app's message, or `.idle` if
+  the app has no outcome to report. An outcome for an address that was edited away meanwhile is dropped
+  (`.idle`).
+- **A failed connect keeps the address in the settings.** The connect may fail only because the
+  backend is switched off, retyping an address with a remote is slow, and the message already says
+  to check the address. Consequences: `AppModel.session` is `.failed`, and a Root view that decides
+  Onboarding from "no backend in settings" would leave Onboarding at the moment `connect()` saves the
+  address. So Root must keep the Onboarding screen (and this model) on screen until `connectState`
+  is `.loaded`, and must not rebuild it when settings change; on the next launch the saved address
+  takes the user to the tabs, where the failure shows with Try Again and Settings.
+- Editing the address so it means another backend returns a failed `connectState` to `.idle`.
 
 ## 7. App target (`Mythwatch`)
 
