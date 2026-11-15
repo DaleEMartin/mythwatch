@@ -701,7 +701,10 @@ higher `id`.
   recordings with the same title but different keys are different shows.
 - **Show title:** the most common title in the group (compared after trimming surrounding
   whitespace); a tie goes to the smaller title.
-- **Show fields:** `kind` is the newest recording's kind. `poster` is the first `.poster` artwork of
+- **Show fields:** `kind` is the most common kind among the
+  recordings, ignoring `.unknown` unless every recording is `.unknown`; a tie goes to the kind of the
+  newest recording that has one of the tied kinds (so one mis-tagged airing cannot turn a series
+  into a movie). `poster` is the first `.poster` artwork of
   the newest recording that has one, else nil. `newest` is the latest `recordingStart`.
   `recordings` is newest first. `episodeCount` counts recordings (the same episode recorded twice
   counts twice); `unwatchedCount` counts those without `watched`.

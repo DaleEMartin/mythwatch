@@ -174,6 +174,17 @@ public enum LibraryBuilder {
         return earlierFirst(a, b)
     }
 
+    /// The most common kind among `ordered` (newest first, never empty). `.unknown` is ignored
+    /// unless every recording is unknown. A tie goes to the kind of the newest recording that has
+    /// one of the tied kinds, so the result never depends on input order.
+    private static func dominantKind(of ordered: [Recording]) -> ProgramKind {
+        var counts: [ProgramKind: Int] = [:]
+        for recording in ordered where recording.kind != .unknown { counts[recording.kind, default: 0] += 1 }
+        guard let best = counts.values.max() else { return .unknown }
+        let tied = Set(counts.filter { $0.value == best }.keys)
+        return ordered.first { tied.contains($0.kind) }?.kind ?? .unknown
+    }
+
     private static func makeShow(id: String, members: [Recording]) -> Show {
         let ordered = members.sorted(by: newerFirst)  // never empty
 
@@ -190,7 +201,7 @@ public enum LibraryBuilder {
             .first
 
         return Show(
-            id: id, title: title, kind: ordered[0].kind, poster: poster,
+            id: id, title: title, kind: dominantKind(of: ordered), poster: poster,
             episodeCount: ordered.count,
             unwatchedCount: ordered.filter { !$0.flags.contains(.watched) }.count,
             newest: ordered[0].recordingStart, recordings: ordered)

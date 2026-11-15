@@ -127,11 +127,76 @@ private func poster(_ name: String) -> ArtworkReference {
         #expect(lib.shows[0].newest == at(40))
     }
 
-    @Test func kindIsTheNewestRecordingsKind() {
+    @Test func kindIsTheMostCommonKindNotTheNewestRecordingsKind() {
         let lib = LibraryBuilder.build(from: [
-            rec(1, kind: .movie, start: 0), rec(2, kind: .series, start: 10),
+            rec(1, kind: .series, start: 0), rec(2, kind: .series, start: 10),
+            rec(3, kind: .movie, start: 20),
         ])
         #expect(lib.shows[0].kind == .series)
+    }
+
+    @Test func kindTieGoesToTheKindOfTheNewestRecordingAmongTheTiedKinds() {
+        let a = LibraryBuilder.build(from: [
+            rec(1, kind: .movie, start: 0), rec(2, kind: .series, start: 10),
+        ])
+        #expect(a.shows[0].kind == .series)
+        let b = LibraryBuilder.build(from: [
+            rec(1, kind: .series, start: 0), rec(2, kind: .movie, start: 10),
+        ])
+        #expect(b.shows[0].kind == .movie)
+        // Same start: the higher id is newer. A third kind that is not tied takes no part.
+        let c = LibraryBuilder.build(from: [
+            rec(1, kind: .series, start: 5), rec(2, kind: .movie, start: 5),
+            rec(3, kind: .sports, start: 99), rec(4, kind: .sports, start: 98),
+            rec(5, kind: .sports, start: 97),
+        ])
+        #expect(c.shows[0].kind == .sports)
+        let d = LibraryBuilder.build(from: [
+            rec(1, kind: .series, start: 5), rec(2, kind: .movie, start: 5),
+        ])
+        #expect(d.shows[0].kind == .movie)
+    }
+
+    @Test func unknownKindIsIgnoredWhenAnyRecordingHasAKnownKind() {
+        let lib = LibraryBuilder.build(from: [
+            rec(1, kind: .unknown, start: 30), rec(2, kind: .unknown, start: 20),
+            rec(3, kind: .unknown, start: 10), rec(4, kind: .series, start: 0),
+            rec(5, kind: .series, start: 1),
+        ])
+        #expect(lib.shows[0].kind == .series)
+        let one = LibraryBuilder.build(from: [
+            rec(1, kind: .unknown, start: 30), rec(2, kind: .unknown, start: 20),
+            rec(3, kind: .movie, start: 0),
+        ])
+        #expect(one.shows[0].kind == .movie)
+    }
+
+    @Test func kindIsUnknownOnlyWhenEveryRecordingIsUnknown() {
+        let lib = LibraryBuilder.build(from: [rec(1, kind: .unknown), rec(2, kind: .unknown, start: 5)])
+        #expect(lib.shows[0].kind == .unknown)
+    }
+
+    @Test func deletePendingRecordingsDoNotVoteOnKind() {
+        let lib = LibraryBuilder.build(from: [
+            rec(1, kind: .series, start: 0),
+            rec(2, kind: .movie, start: 10, flags: .deletePending),
+            rec(3, kind: .movie, start: 20, flags: .deletePending),
+        ])
+        #expect(lib.shows[0].kind == .series)
+    }
+
+    @Test func kindDoesNotDependOnInputOrder() {
+        let input: [Recording] = [
+            rec(1, kind: .movie, start: 10), rec(2, kind: .series, start: 10),
+            rec(3, kind: .unknown, start: 50), rec(4, kind: .movie, start: 0),
+            rec(5, kind: .series, start: 20),
+        ]  // movie 2, series 2 (tied), unknown ignored; newest of tied is id 5 (series)
+        let permutations: [[Int]] = [
+            [0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [2, 0, 4, 1, 3], [3, 4, 0, 2, 1], [1, 3, 2, 4, 0],
+        ]
+        for p in permutations {
+            #expect(LibraryBuilder.build(from: p.map { input[$0] }).shows[0].kind == .series)
+        }
     }
 
     @Test func showRecordingsAreNewestFirstWithIdTieBreak() {
@@ -349,6 +414,16 @@ private func poster(_ name: String) -> ArtworkReference {
         ])
         #expect(s.count == 1)
         #expect(ids(s[0].episodes) == [2, 1])
+    }
+
+    @Test func seriesWithOneRecordingMisTaggedAsMovieStillHasNumberedSeasons() {
+        let s = seasons([
+            rec(1, season: 1, episode: 1, start: 0), rec(2, season: 1, episode: 2, start: 10),
+            rec(3, season: 2, episode: 1, start: 20), rec(4, kind: .movie, season: 2, episode: 2, start: 30),
+        ])
+        #expect(s.map(\.id) == [1, 2])
+        #expect(s.map(\.title) == ["Season 1", "Season 2"])
+        #expect(ids(s[1].episodes) == [3, 4])
     }
 
     @Test func showWithNoRecordingsHasNoSeasons() {

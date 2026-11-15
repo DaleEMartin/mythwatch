@@ -92,7 +92,8 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   VLC. Lesson: a subagent's mutation run hung for 38 minutes on an unreleased parked call.
   Tell every agent that runs tests with suspension points to run `swift test` under
   `timeout 120` and never wait on an unbounded run.
-  Next: the two approved follow-ups (show kind; chained landing), then **M4-2**.
+- **Show kind follow-up done and committed** (2026-11-15): most common kind, `.unknown` ignored
+  unless all are unknown (SPEC §6.1). Next: the chained landing (SPEC §5.1 R4), then **M4-2**.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
