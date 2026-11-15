@@ -339,7 +339,7 @@ public struct MediaTrack: Identifiable, Sendable, Hashable { id: Int; name: Stri
 
 @MainActor public protocol PlayerEngine: AnyObject {
     var snapshot: PlayerSnapshot { get }
-    var snapshots: AsyncStream<PlayerSnapshot> { get }   // emits on every change; position at least 4x per second while playing
+    var snapshots: AsyncStream<PlayerSnapshot> { get }   // emits on every change; position about every 250 ms while playing
     func load(url: URL, startAt: Duration?)
     func play()
     func pause()
@@ -354,6 +354,28 @@ public struct MediaTrack: Identifiable, Sendable, Hashable { id: Int; name: Stri
 
 Time is injected as `now: @MainActor () -> ContinuousClock.Instant`. No timers: all periodic work
 is driven by engine snapshots, so tests advance time by feeding snapshots and moving a fake clock.
+
+**Engine rules** (what every `PlayerEngine` promises; measured against VLCKit in `docs/VLCKIT.md`
+§7 and binding on `VLCPlayerEngine`). `FakePlayerEngine` with `automaticResponses` already
+behaves this way:
+
+- **Rate.** While playing, a position arrives about every 250 ms (VLC: median 256 ms, up to about
+  330 ms). Nothing arrives while paused. Status-only noise from the player (VLC sends hundreds of
+  "buffering" events a minute while playing) is not passed on: `.buffering` is reported only
+  when playback has actually stalled.
+- **Start.** After `load(url:startAt:)` the engine reports `.loading` at `startAt ?? 0` until the
+  player reports its first real position, and never reports any other position before then
+  (VLC reads 0 for about a second after it says it is playing).
+- **Seek.** `seek(to:)` emits a snapshot at the target at once, also while paused. Later
+  positions come from the player.
+- **End.** `.ended` carries position = duration when the duration is known. A recording still
+  being written is not ended when the player reaches the size it saw on opening: the engine
+  checks the current size (a 1-byte range GET) and, if the file has grown, reopens at the
+  last position without reporting `.ended` (VLC reads the size once; `docs/VLCKIT.md` §10).
+- **Failure.** A player error becomes `.failed(message)`. So does reaching the end before any
+  position was ever reported: VLC "plays" a backend 404 page to its end.
+- **Stream.** `snapshots` finishes only when the engine is deallocated. One engine serves one
+  playback.
 
 ### 5.1 `CommercialSkipper`
 
@@ -1130,9 +1152,16 @@ The transport bar shows elapsed and remaining time, a scrubber with commercial b
 marked segments, and the title. It hides after 5 s of no input. Publish Now Playing info and
 handle remote commands through `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`.
 
-`VLCPlayerEngine` implements `PlayerEngine` over VLCKit. It is the only file that imports VLCKit.
-It applies deinterlacing when `AppSettings.deinterlace` is true. Requirements beyond that come
-from task M0-3's findings.
+`VLCPlayerEngine` implements `PlayerEngine` over VLCKit. It is the only file that imports VLCKit
+(`#if os(tvOS) import TVVLCKit #else import MobileVLCKit #endif`). It follows the engine rules in
+section 5 and the findings in `docs/VLCKIT.md`, in particular:
+
+- Every media gets the option `:demux=avformat`. VLC's own MPEG-TS demuxer cannot find the
+  length of, or seek in, MythTV recordings over HTTP. `startAt` is passed as `:start-time=<s>`.
+- Deinterlacing is the `bob` filter when `AppSettings.deinterlace` is true, and none otherwise.
+  The app passes the setting to the engine's initialiser (one engine per playback), so
+  `PlayerEngine` has no call for it. `yadif` and `yadif2x` drop frames on Apple TV HD.
+- Track lists leave out VLC's "Disable" entry (id -1); `selectedSubtitleTrack = nil` sets -1.
 
 **VLCKit linking (licence requirement).** VLCKit/libVLC is LGPL. It must be linked
 **dynamically**: a separate `.framework` embedded in the app bundle ("Embed & Sign"), never
@@ -1140,6 +1169,11 @@ merged into the app binary. Do not use a static VLCKit build. No Mythwatch sourc
 `VLCPlayerEngine` may import it, and no VLCKit source is copied into this repo. The exact VLCKit
 version, where its source can be obtained, and the LGPL text go in `THIRD_PARTY_NOTICES.md` and
 the in-app licences screen.
+
+The pinned build is VideoLAN's **TVVLCKit 3.7.4** (MobileVLCKit 3.7.4 for the later iPhone app),
+libVLC 3.0.24. `Tools/fetch-vlckit.sh` downloads it, checks its SHA-256, and unpacks it into the
+git-ignored `Vendor/`. The project embeds `Vendor/TVVLCKit.xcframework`. Run the script once
+after cloning, before building the app.
 
 `Info.plist` additions: `NSAppTransportSecurity > NSAllowsLocalNetworking = true`,
 `NSLocalNetworkUsageDescription`, `NSBonjourServices = ["_mythbackend._tcp"]`.

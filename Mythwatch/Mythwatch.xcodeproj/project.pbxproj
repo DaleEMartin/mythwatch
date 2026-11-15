@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		A1B2C3D400000000000000B1 /* MythwatchFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E2 /* MythwatchFeatures */; };
 		A1B2C3D400000000000000B2 /* MythBackendV35 in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E3 /* MythBackendV35 */; };
+		A1B2C3D400000000000000B4 /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */; };
+		A1B2C3D400000000000000B5 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -21,9 +23,22 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A1B2C3D400000000000000B7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A1B2C3D400000000000000B5 /* TVVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		A1B2C3D400000000000000A5 /* Mythwatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mythwatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D400000000000000A6 /* MythwatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MythwatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = ../Vendor/TVVLCKit.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -45,6 +60,7 @@
 			files = (
 				A1B2C3D400000000000000B1 /* MythwatchFeatures in Frameworks */,
 				A1B2C3D400000000000000B2 /* MythBackendV35 in Frameworks */,
+				A1B2C3D400000000000000B4 /* TVVLCKit.xcframework in Frameworks */,
 			);
 		};
 		A1B2C3D400000000000000AA /* Frameworks */ = {
@@ -60,6 +76,7 @@
 			children = (
 				A1B2C3D400000000000000A7 /* Mythwatch */,
 				A1B2C3D400000000000000A8 /* MythwatchUITests */,
+				A1B2C3D400000000000000B8 /* Frameworks */,
 				A1B2C3D400000000000000AC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -73,6 +90,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		A1B2C3D400000000000000B8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -83,6 +108,7 @@
 				A1B2C3D400000000000000AD /* Sources */,
 				A1B2C3D400000000000000A9 /* Frameworks */,
 				A1B2C3D400000000000000AE /* Resources */,
+				A1B2C3D400000000000000B7 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);

@@ -38,7 +38,7 @@ public struct MediaTrack: Identifiable, Sendable, Hashable {
 /// tests use a fake (task M3-1).
 @MainActor public protocol PlayerEngine: AnyObject {
     var snapshot: PlayerSnapshot { get }
-    /// Emits on every change; position at least four times a second while playing.
+    /// Emits on every change; position about every 250 ms while playing (SPEC §5 engine rules).
     var snapshots: AsyncStream<PlayerSnapshot> { get }
     func load(url: URL, startAt: Duration?)
     func play()

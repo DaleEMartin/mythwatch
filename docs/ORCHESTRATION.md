@@ -112,9 +112,25 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   a position other than `startAt` just after `load` (a break at 0 could then fire on resume)?
   How long are positions stale after a seek (over 3 s defeats the settle rule)? Does it emit
   snapshots while paused?
+- **M0-3 done and committed** (2026-11-15, direct Opus session with the owner): **go.**
+  `docs/VLCKIT.md` holds every measurement. Pinned VideoLAN TVVLCKit / MobileVLCKit **3.7.4**
+  (libVLC 3.0.24, dynamic, no GPL-only modules); VLCKit 4.0 is alpha-only and rejected.
+  `Tools/fetch-vlckit.sh` puts it in the git-ignored `Vendor/` (run it after cloning); the
+  project embeds it, unused until M3-3. The throwaway spike harness stays on the
+  unmerged branch `m0-3-vlckit-spike`. `PlayerEngine` is unchanged; SPEC §5 gained "engine
+  rules" and SPEC §7 the VLC options. For M3-3: **every media needs `:demux=avformat`** (VLC's
+  own TS demuxer cannot seek MythTV recordings over HTTP); deinterlace is `bob`; ignore VLC's
+  `player.state` and its flood of Buffering/ESAdded events, use `isPlaying`; `Ended` before
+  any position is a failure (a backend 404 "plays" to its end); on an in-progress recording VLC
+  stops at the size it saw on opening, so the engine must reopen at the last position when the
+  file has grown (tested: 0.9 to 1.8 s gap, no lost frames; `VLCKIT.md` §10). Seek-settle values stay at
+  2 s / 3 s (VLC echoes the target at once, lands within 0.7 s). For M2-7: **the Apple TV
+  could not resolve the bare host name `basement`** in VLC (`basement.local` and the IP
+  work); check `URLSession` and guide the address field accordingly. For M5-4: audit the
+  licences of the libraries bundled in VLCKit (libzvbi first). For the iPhone app: strip
+  MobileVLCKit's armv7 slices before an App Store upload.
 - **Every task that can run without the owner is done.** Remaining, all needing the owner:
-  **M0-3** (VLCKit spike, real Apple TV; go/no-go), **M2-7** (library and settings UI), then
-  M3-3, M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
+  **M2-7** (library and settings UI), then M3-3 (real Apple TV), M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
   session; do not launch them unattended.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
