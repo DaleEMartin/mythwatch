@@ -93,15 +93,42 @@ struct V35LiveContractTests {
         #expect(Set(recordings.map(\.id)).count == recordings.count, "listed ids are not unique")
     }
 
-    @Test func singleFetchOfFirstListedMatchesListedValue() async throws {
+    /// A finished recording is identical from both endpoints. (A recording in progress is not:
+    /// see `singleFetchOfInProgressRecordingDiffersOnlyInFlags` and docs/BACKEND-V35.md.)
+    @Test func singleFetchOfFirstFinishedListedMatchesListedValue() async throws {
         let ctx = try LiveContext()
         let (adapter, recordings) = try await ctx.listing()
-        let first = try #require(recordings.first)
-        let fetched = try await adapter.recordings.recording(id: first.id)
-        let differing = differingFields(first, fetched)
-        print("LIVE single fetch: fields differing from the list entry: \(differing)")
-        #expect(fetched.id == first.id)
+        let finished = try #require(recordings.first { !$0.flags.contains(.recordingInProgress) })
+        let fetched = try await adapter.recordings.recording(id: finished.id)
+        let differing = differingFields(finished, fetched)
+        print("LIVE single fetch (finished): fields differing from the list entry: \(differing)")
+        #expect(fetched.id == finished.id)
         #expect(differing.isEmpty, "recording(id:) differs from the list entry in: \(differing)")
+    }
+
+    /// Only when the list has a recording in progress: the single fetch must differ in `flags`
+    /// and nothing else, and the flag difference must be confined to the in-use flags.
+    @Test func singleFetchOfInProgressRecordingDiffersOnlyInFlags() async throws {
+        let ctx = try LiveContext()
+        let (adapter, recordings) = try await ctx.listing()
+        let inProgress = recordings.filter { $0.flags.contains(.recordingInProgress) }
+        guard let listed = inProgress.first else {
+            print("LIVE in-progress: none of \(recordings.count) listed recordings is in progress; nothing to compare")
+            return
+        }
+        let fetched = try await adapter.recordings.recording(id: listed.id)
+        let differing = differingFields(listed, fetched)
+        let flagDelta = listed.flags.symmetricDifference(fetched.flags)
+        print(
+            "LIVE in-progress: \(inProgress.count) in progress; fields differing: \(differing); "
+                + "fetched has recordingInProgress: \(fetched.flags.contains(.recordingInProgress))")
+        #expect(fetched.id == listed.id)
+        #expect(differing.filter { $0 != "flags" }.isEmpty, "other fields differ: \(differing)")
+        // Documented: the single fetch lacks INUSERECORDING; the only mapped in-use flag is
+        // recordingInProgress, so no other domain flag may differ. (Mapped flags such as
+        // commercialsFlagged come from the same database row on both paths.)
+        #expect(flagDelta.subtracting(.recordingInProgress).isEmpty,
+                "flags differ beyond recordingInProgress: \(flagDelta)")
     }
 
     @Test func commercialBreaksOfFirstFlaggedRecordingAreOrdered() async throws {

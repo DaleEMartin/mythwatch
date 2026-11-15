@@ -102,7 +102,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   package build were re-run after it and pass. The live read-only suite was re-run and one
   check failed for a reason unrelated to M4-2: while a recording is in progress, the list
   reports `INUSERECORDING` and status "Recording" for it but `GetRecorded` does not (seen on
-  id 3753, 2026-11-15). A follow-up corrects `BACKEND-V35.md` and the live test.
+  id 3753, 2026-11-15). Fixed in the next commit: `BACKEND-V35.md`, SPEC §3 and §9.1 now say
+  `recordingInProgress` is reliable only from `allRecordings()`; the adapter is unchanged; the
+  live suite passes again (no recording was in progress at that run, so the new in-progress
+  live test has not yet met a real one and may be strict about a growing file's size).
   For M4-3: the view must hide the skipped banner when its own clock passes `undoUntil`
   (no ticks arrive while paused); all banner wording is M4-3's.
   For M0-3, in addition to the earlier questions: does VLC report `.playing` / `.buffering` at

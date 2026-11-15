@@ -136,6 +136,31 @@ e.g. `0x00100000`, which falls under "anything else". [source] Names seen or def
 | `DELETEPENDING` | `.deletePending` |
 | anything else (`AUTOEXP`, `REPEAT`, `TRANSCODED`, ...) | ignored |
 
+**A recording in progress (list and single fetch disagree).** For a recording still being
+recorded, `GetRecordedList` reports `INUSERECORDING` (and usually `INUSEOTHER`) in
+`ProgramFlagNames` and `Recording.Status`/`StatusName` of "Recording", while `GetRecorded` for the
+same `RecordedId`, seconds apart, reports neither: the in-use flags are absent and the status is
+`Recorded`. [live 2026-11-15, GET only: list row `AUTOEXP|COMMPROCESSING|INUSERECORDING|INUSEOTHER`
+with `Recording`; single fetch `AUTOEXP|EDITING|COMMPROCESSING` with `Recorded`; the finished
+recording next in the list was identical from both endpoints.] Why: the list loader merges two
+extra sources into each row, the table of in-use programs (the in-use flags) and the scheduler's
+set of active recordings (status "Recording" when the recording's end is still ahead and it is
+active); the single fetch builds one programme from the database row alone, which has no in-use
+information and always starts with status `Recorded`. [source: `v2dvr.cpp`,
+`libmythbase/programinfo.cpp`] `EDITING` showing only on the single fetch is a separate cause:
+both paths derive it from "really editing" or "comm-flag processing", but the list's version of
+that test compares against a comm-flag status constant instead of the flag, so it never sets
+`EDITING` from `COMMPROCESSING`. [source] The list also clears `COMMPROCESSING` when no comm-flag
+job is running. `EDITING` is not mapped, so it does not matter to the adapter.
+Consequence: `recordingInProgress` (and any in-use state) is **reliable only from
+`allRecordings()`**; `recording(id:)` of an in-progress recording comes back without it. Decision:
+the adapter does not work around this (no field of the single-fetch reply shows in-progress state
+reliably, and an `EndTs` in the future is only a scheduled end). Nothing in the package fetches a
+single recording to decide in-progress state; `LibraryBuilder` works from the list. Other fields
+(for example `FileSize`, `Recording.EndTs`) may also change between two requests while the file
+grows; the live test compares only recordings it can expect to be stable plus, for an in-progress
+one, every field except `flags`.
+
 **Recording object:**
 
 | JSON field | Type | Maps to |

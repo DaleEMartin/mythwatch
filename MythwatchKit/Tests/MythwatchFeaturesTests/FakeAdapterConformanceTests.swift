@@ -27,6 +27,7 @@ struct FakeConformanceScenario: ConformanceScenario {
         store.add(.fixture(id: RecordingID(rawValue: 3)), resumePosition: .seconds(600))
         store.add(.fixture(id: RecordingID(rawValue: 4)), bookmark: .seconds(120))
         store.add(.fixture(id: RecordingID(rawValue: 5), flags: [.deletePending]))
+        store.add(.fixture(id: RecordingID(rawValue: 6), flags: [.recordingInProgress]))
         return FakeBackendAdapter(store: store, baseURL: connection.baseURL)
     }
 }

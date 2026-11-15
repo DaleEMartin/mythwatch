@@ -259,6 +259,53 @@ struct ConformanceCatchesTests {
         expectCaught(found, mentioning: "lastModified")
     }
 
+    /// The list reports `recordingInProgress` for id 64; the fetch (as on a real backend) does not.
+    private static func listsInProgress(_ a: inout PatchedAdapter) {
+        a.recordings = RecordingsOverride(
+            base: a.recordings,
+            all: { base in
+                try await base.allRecordings().map { r in
+                    var r = r
+                    if r.id.rawValue == 64 { r.flags.insert(.recordingInProgress) }
+                    return r
+                }
+            })
+    }
+
+    @Test func inProgressRecordingMayDifferInFlagsOnly() async throws {
+        let found = try await violations(.recordingByIDEqualsListedValue) { a in Self.listsInProgress(&a) }
+        #expect(found.isEmpty, "\(found)")
+    }
+
+    @Test func inProgressRecordingDifferingInAnotherFieldIsCaught() async throws {
+        let found = try await violations(.recordingByIDEqualsListedValue) { a in
+            Self.listsInProgress(&a)
+            let all = a.recordings
+            a.recordings = RecordingsOverride(
+                base: all,
+                all: { _ in try await all.allRecordings() },
+                one: { base, id in
+                    var r = try await base.recording(id: id)
+                    if id.rawValue == 64 { r.fileSize += 1 }
+                    return r
+                })
+        }
+        expectCaught(found, mentioning: "fileSize")
+        expectCaught(found, mentioning: "64")
+    }
+
+    @Test func finishedRecordingDifferingInFlagsIsCaught() async throws {
+        let found = try await violations(.recordingByIDEqualsListedValue) { a in
+            a.recordings = RecordingsOverride(base: a.recordings, one: { base, id in
+                var r = try await base.recording(id: id)
+                if id.rawValue == 64 { r.flags.insert(.watched) }
+                return r
+            })
+        }
+        expectCaught(found, mentioning: "flags")
+        expectCaught(found, mentioning: "64")
+    }
+
     @Test func listedIDThatCannotBeFetched() async throws {
         let found = try await violations(.recordingByIDEqualsListedValue) { a in
             a.recordings = RecordingsOverride(base: a.recordings, one: { base, id in

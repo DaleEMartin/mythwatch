@@ -149,10 +149,14 @@ public struct RecordingQuery: Sendable { /* v1: no fields; fetches every non-del
 
 public protocol RecordingsService: Sendable {
     func allRecordings() async throws -> [Recording]            // adapter pages internally
-    func recording(id: RecordingID) async throws -> Recording   // throws BackendError.notFound
+    func recording(id: RecordingID) async throws -> Recording   // throws BackendError.notFound; its `recordingInProgress` flag is NOT reliable, read it from allRecordings()
     func setWatched(_ watched: Bool, id: RecordingID) async throws
     func delete(id: RecordingID, allowRerecord: Bool) async throws
 }
+// `recordingInProgress` (and any other in-use state) is authoritative only from `allRecordings()`.
+// A recording fetched singly with `recording(id:)` may come back without it while the list has it,
+// on a real v35 backend (docs/BACKEND-V35.md). Code that needs to know whether a recording is
+// still being recorded must use the listed value and must not re-fetch it to decide.
 
 public protocol PlaybackStateService: Sendable {
     func resumePosition(for id: RecordingID) async throws -> Duration?   // nil = none
@@ -1319,7 +1323,7 @@ a hand-picked list. One check can be re-run alone from Xcode's test navigator (t
 | --- | --- |
 | `listIDsAreUnique` | `allRecordings()` lists no id twice |
 | `listOrderIsStable` | two `allRecordings()` calls on the same adapter list the same ids in the same order (no particular order is required) |
-| `recordingByIDEqualsListedValue` | for every listed recording, `recording(id:)` returns a value `==` to the listed one (every field of `Recording`; a mismatch is reported field by field) |
+| `recordingByIDEqualsListedValue` | for every listed recording, `recording(id:)` returns a value `==` to the listed one (every field of `Recording`; a mismatch is reported field by field). Exception: for a listed recording carrying `recordingInProgress`, `flags` may differ and every other field must still be equal, because a backend may report in-use state only in the list (docs/BACKEND-V35.md, "A recording in progress") |
 | `unknownIDThrowsNotFound` | `absentID` is not listed and `recording(id: absentID)` throws exactly `BackendError.notFound` |
 | `commercialBreaksAreWellFormed` | for every listed id and `idWithBreaks`, `commercialBreaks(for:)` satisfies `breakViolations` (below), and `idWithBreaks` has at least one break |
 | `positionIsNilWhenNoneStored` | `resumePosition(for:)` and `bookmark(for:)` both return nil for `idWithoutStoredPosition`; each returns a duration above zero for `idWithResumePosition` / `idWithBookmark` when the scenario names one |

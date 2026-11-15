@@ -27,7 +27,9 @@ public enum AdapterConformance {
         case listIDsAreUnique
         /// Two `allRecordings()` calls on the same data list the same ids in the same order.
         case listOrderIsStable
-        /// `recording(id:)` of every listed id is `==` to the listed value.
+        /// `recording(id:)` of every listed id is `==` to the listed value. For a listed
+        /// recording with `recordingInProgress`, `flags` is allowed to differ (a backend may report
+        /// in-use state only in the list); every other field must still be equal.
         case recordingByIDEqualsListedValue
         /// `recording(id: absentID)` throws `BackendError.notFound`, and `absentID` is not listed.
         case unknownIDThrowsNotFound
@@ -239,7 +241,8 @@ extension AdapterConformance.Check {
         var found: [String] = []
         for listed in list {
             do {
-                let fetched = try await adapter.recordings.recording(id: listed.id)
+                var fetched = try await adapter.recordings.recording(id: listed.id)
+                if listed.flags.contains(.recordingInProgress) { fetched.flags = listed.flags }
                 if fetched != listed {
                     let fields = AdapterConformance.differences(listed: listed, fetched: fetched)
                     found.append(
