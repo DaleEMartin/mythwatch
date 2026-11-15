@@ -321,7 +321,9 @@ applied to each request before sending. It throws `BackendError` only, mapped as
 
 ## 5. Playback (`MythwatchPlayback`)
 
-Everything in this target is `@MainActor` and has no I/O of its own.
+Nothing in this target does I/O of its own. The engine and the session are `@MainActor`; the plain
+value types (`PlayerSnapshot`, `MediaTrack`, `StartPoint` and everything in §5.1) are nonisolated
+`Sendable` values.
 
 ```swift
 public enum PlayerStatus: Sendable, Equatable { case idle, loading, playing, paused, buffering, ended, failed(String) }
@@ -351,7 +353,8 @@ is driven by engine snapshots, so tests advance time by feeding snapshots and mo
 
 ### 5.1 `CommercialSkipper`
 
-A value type holding state; every method returns effects and performs none.
+A value type holding state; every method returns effects and performs none. Time arrives only as
+`now` arguments.
 
 ```swift
 public enum CommercialSkipMode: String, Sendable, CaseIterable, Codable { case auto, prompt, off }
@@ -359,11 +362,11 @@ public enum CommercialSkipMode: String, Sendable, CaseIterable, Codable { case a
 public struct CommercialSkipConfig: Sendable, Equatable {
     var mode: CommercialSkipMode = .auto
     var landBeforeEnd: Duration = .seconds(1)       // land this long before the break ends
-    var quietPeriod: Duration = .seconds(3)         // no automatic action this soon after a user seek or a skip
+    var quietPeriod: Duration = .seconds(3)         // no automatic action this soon after a user seek, a skip or an undo
     var endGuard: Duration = .seconds(10)           // never skip to within this of the end of the file
     var undoWindow: Duration = .seconds(8)
     var undoRewind: Duration = .seconds(2)
-}
+}   // public init with every parameter defaulted as above
 
 public enum SkipEffect: Sendable, Equatable {
     case seek(to: Duration)
@@ -373,42 +376,109 @@ public enum SkipEffect: Sendable, Equatable {
     case withdrawOffer
 }
 
-public struct CommercialSkipper: Sendable {
-    public init(breaks: [CommercialBreak], config: CommercialSkipConfig)
+public struct CommercialSkipper: Sendable, Equatable {
+    public init(breaks: [CommercialBreak], config: CommercialSkipConfig)   // normalises `breaks`
+    public let breaks: [CommercialBreak]                 // normalised; for the scrubber, in every mode
+    public private(set) var config: CommercialSkipConfig
+    public mutating func setMode(_ mode: CommercialSkipMode) -> [SkipEffect]   // R11
     public mutating func tick(position: Duration, duration: Duration?, now: ContinuousClock.Instant) -> [SkipEffect]
     public mutating func userSeeked(to position: Duration, now: ContinuousClock.Instant) -> [SkipEffect]
     public mutating func acceptOffer(position: Duration, now: ContinuousClock.Instant) -> [SkipEffect]
     public mutating func undo(now: ContinuousClock.Instant) -> [SkipEffect]
-    public static func normalise(_ breaks: [CommercialBreak]) -> [CommercialBreak]   // sort, drop empty, merge overlaps
+    public static func normalise(_ breaks: [CommercialBreak]) -> [CommercialBreak]   // sort, drop empty, merge overlapping and touching
 }
 ```
+
+`normalise` has the same contract as `V35MarkupService`'s private copy (BACKEND-V35.md, "Commercial
+breaks"): sort by start (then end), merge ranges that overlap **or touch** (`next.start <=
+last.end`), drop empty ranges (`TimeRange` cannot hold one, so there is nothing to drop in
+practice). Keep the two identical.
+
+**Effect order.** Inside one returned array: at most one `.seek` first; then removals
+(`.withdrawOffer` before `.hideSkipped`); then additions (`.offerSkip`, `.showSkipped`). So a skip
+is `[.seek, .showSkipped]`, an accepted offer `[.seek, .withdrawOffer, .showSkipped]`, an undo
+`[.seek, .withdrawOffer?, .hideSkipped]`. A `.showSkipped` replaces any banner showing; no
+`.hideSkipped` comes before it.
+
+**Terms.** A break's *landing point* is `max(start, end - landBeforeEnd)`; its *skippable part* is
+`[start, landing point)`. A break is *guarded* on a tick when that tick's `duration` is known and
+`end + endGuard > duration`. *Idempotence:* a second `tick` with the same position and `now` emits
+nothing the first did not already emit (state moves on with every effect).
 
 Rules (derived from mythfrontend's `CommBreakMap`, restated in time instead of frames):
 
 - **R1 Armed break.** The skipper keeps the index of the *armed* break: the first break whose
   `start` is at or after the current position. It is set at init (position 0), and recomputed by
-  `userSeeked`.
+  `userSeeked`. *Refinements:* a break starting exactly at the position is armed (so a break at 0
+  is skipped on the first tick, and a seek landing exactly on a start arms that break). Suppressed
+  breaks (R8) are passed over. A `tick` whose position is lower than the previous tick's, with no
+  `userSeeked` in between (the engine corrected itself or restarted), re-arms the first break
+  starting at or after the new position **only if that is earlier than the break already armed**;
+  it never moves the armed break later, so backwards jitter inside an armed break does not disarm
+  it. No threshold. It starts no quiet period.
 - **R2 Auto trigger.** In `.auto`, `tick` fires when `position >= armed.start` and
   `position < armed.end`. It emits `.seek(to: max(armed.start, armed.end - landBeforeEnd))` and
-  `.showSkipped`, then arms the next break.
+  `.showSkipped`, then arms the next break. *Refinements:* it fires on the first tick whose
+  position is in the armed break's skippable part, however far past the start (a tick that steps
+  over the start fires). It never seeks backwards or to where the position already is: if the
+  position is at or past the landing point (including every break shorter than `landBeforeEnd`,
+  whose landing point is its start), nothing is emitted and the break plays; R6 later passes it.
+  `skipped` is the distance actually jumped, `landing point - position`. `undoUntil` is
+  `now + undoWindow`. The *skip origin* used by R7 is the position of the tick that fired.
 - **R3 Seeking into a break does not skip it.** Because R1 arms the first break starting at or
-  after the new position, a break the user lands inside is never armed. It plays.
+  after the new position, a break the user lands inside is never armed. It plays. In prompt mode it
+  is not offered.
 - **R4 Quiet period.** `tick` takes no automatic action within `quietPeriod` of the last
   `userSeeked` or the last skip. When the quiet period ends, R2 applies only if the armed break
-  still qualifies.
+  still qualifies. *Refinements:* a quiet period is started by `userSeeked`, an automatic skip, an
+  accepted offer and an undo; not by a mode change. It covers `now < start + quietPeriod`. R6 still
+  runs during it (it emits nothing). "Still qualifies" means the position is in the armed break's
+  skippable part and the break is not guarded; a break passed during the quiet period was
+  already passed over by R6, and one whose landing point was reached is not skipped. Consequence
+  (left as written; an open question for the owner, raised by M4-1): after a skip lands at
+  `end - landBeforeEnd`, a next break
+  starting less than `quietPeriod - landBeforeEnd` (2 s by default) after that end is entered during
+  the quiet period and plays until it ends, then is skipped.
 - **R5 End guard.** If `duration` is known and `armed.end + endGuard > duration`, do not skip
-  that break; arm the next one (there will be none).
+  that break; arm the next one (there will be none). *Refinement:* evaluated on every tick with that
+  tick's `duration`. A guarded break stays armed but is neither skipped nor offered, so if a
+  recording still in progress grows enough, a later tick may skip it. `nil` duration means no
+  guard. An offer showing for a break that becomes guarded is withdrawn.
 - **R6 Passed breaks.** If `position >= armed.end` (playback jumped past it without a seek
-  notification), arm the next break without emitting anything.
+  notification), arm the next break without emitting anything. *Refinement:* repeated until the
+  armed break ends after the position, so a jump past several breaks arms the first not yet ended;
+  if the position is in that one's skippable part, R2 (or R9) applies to it in the same tick.
 - **R7 Undo.** `undo` within `undoWindow` of a skip emits `.seek(to: max(0, skipOrigin - undoRewind))`
   and `.hideSkipped`, marks that break *suppressed* for the life of the skipper, and starts a quiet
   period. After the window, `tick` emits `.hideSkipped` once and `undo` does nothing.
+  *Refinements:* "within" is `now < undoUntil`; the first tick with `now >= undoUntil` hides the
+  banner. `undo` re-arms from the target as R1 does, so if the target lies inside an earlier break
+  that break plays (R3). Only the most recent skip can be undone: a second skip during the first's
+  window replaces the banner, and undo undoes only the second. `userSeeked` during the window
+  hides the banner (`.hideSkipped`) and ends the window: an undo would jump back over the viewer's
+  own seek. `undo` with no banner showing returns `[]`.
 - **R8 Suppressed breaks** are never armed again, in any mode.
 - **R9 Prompt mode.** `tick` emits `.offerSkip(break)` once when the position enters an armed
   break and `.withdrawOffer` once when it leaves. `acceptOffer` behaves like R2's skip, including
-  the banner and undo. R3, R5 and R8 apply; R4 does not delay the offer.
-- **R10 Off.** No effects, ever. Breaks are still exposed for the scrubber.
-- **R11 Mode change mid-playback** takes effect on the next `tick`, re-arming from the current position.
+  the banner and undo. R3, R5 and R8 apply; R4 does not delay the offer. *Refinements:* "inside"
+  means the skippable part: the offer is withdrawn when the position reaches the landing point
+  (nothing is left to skip), passes the end, goes back before the start, when the break becomes
+  guarded, on `userSeeked` (always, including a seek within the break, which then plays per R3), on
+  `undo`, and on a mode change. `acceptOffer` with no offer showing returns `[]`; with an offer
+  showing but the position at or past the landing point it returns `[.withdrawOffer]`. An accepted
+  offer starts a quiet period (which delays nothing in prompt mode).
+- **R10 Off.** No effects, ever. Breaks are still exposed for the scrubber. *Refinement:* `tick`,
+  `userSeeked`, `acceptOffer` and `undo` return `[]`. Tidying up on the way into `.off` is done by
+  `setMode` (R11).
+- **R11 Mode change mid-playback** takes effect on the next `tick`, re-arming from the current
+  position. *Refinements:* the mode changes through `setMode(_:)`, which returns at once the
+  effects that remove what the new mode would not show: `.withdrawOffer` if an offer is showing
+  (any change away from prompt), and `.hideSkipped` if a banner is showing and the new mode is
+  `.off` (its undo would do nothing). Between auto and prompt the banner and its undo stay. The
+  next tick re-arms per R1 from its position, so a break the position is already inside plays
+  (auto → prompt inside a break: no offer; prompt with an offer → auto: the offer goes and the
+  break plays; off → auto inside a break: it plays and the next one is skipped). A mode change
+  starts no quiet period. Setting the current mode returns `[]` and changes nothing.
 
 ### 5.2 `PlaybackSession`
 

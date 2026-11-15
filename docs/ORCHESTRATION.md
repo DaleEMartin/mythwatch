@@ -71,8 +71,14 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   Onboarding screen up until `connectState` is `.loaded`; Settings should auto-save on exit
   when `canSave`. The tvOS app build and UI test were re-run after this task and pass.
   **Milestone 2 is complete except M2-7 (UI), which needs the owner.**
-  Next without the owner: **M4-1** (pure skipper), then M3-1, M3-2, M4-2. These do not need
-  VLCKit, but M0-3 may change `PlayerEngine` (SPEC §5); if it does, M3-1/M3-2 need a follow-up.
+  M3-1, M3-2 and M4-2 can run without the owner. They do not need VLCKit, but M0-3 may change
+  `PlayerEngine` (SPEC §5); if it does, M3-1/M3-2 need a follow-up.
+- **M4-1 done and committed** (2026-11-14): `CommercialSkipper` with rules R1-R11, refinements
+  written under each rule in SPEC §5.1, a seeded property test and a 23-mutation check.
+  Open question put to the owner (SPEC R4): two breaks less than 2 s apart show about 1 s of
+  the second before it is skipped; a chained-landing rule is proposed, not applied.
+  `[verify]` for M0-3 / M4-2: whether VLC reports stale positions just after a seek (prompt mode
+  would re-offer a break for a tick). Next: **M3-1**, then M3-2, M4-2.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
