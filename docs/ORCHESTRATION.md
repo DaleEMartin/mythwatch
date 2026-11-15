@@ -83,7 +83,16 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `waitUntilDelivered()` (SPEC §8 "`FakePlayerEngine` rules").
   Questions for M0-3 about `PlayerEngine` (SPEC §5): a failed load is only visible as a
   `.failed` snapshot; there is no way to set deinterlacing through the protocol; the stream has
-  no teardown signal; `snapshots` should be read once. Next: **M3-2**, then M4-2.
+  no teardown signal; `snapshots` should be read once.
+- **M3-2 done and committed** (2026-11-15): `PlaybackSession` without commercials and
+  `AppModel.makePlaybackSession`. Save and finish sequencing is in SPEC §5.2 "Refinements";
+  34 mutations all caught. For M3-4: the player screen must call `finish()` when it closes
+  (nothing can be written from `deinit`), and there is no retry API (retry = a new session
+  with `.resume`). For M0-3: tune the seek-settle values (2 s tolerance, 3 s timeout) against
+  VLC. Lesson: a subagent's mutation run hung for 38 minutes on an unreleased parked call.
+  Tell every agent that runs tests with suspension points to run `swift test` under
+  `timeout 120` and never wait on an unbounded run.
+  Next: the two approved follow-ups (show kind; chained landing), then **M4-2**.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

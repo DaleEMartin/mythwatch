@@ -531,8 +531,9 @@ Behaviour:
   `skipForwardSeconds` / `skipBackwardSeconds` in seconds, and every other field keeps its default.
   `deinterlace` is an engine concern and is not part of `PlaybackSettings`.
 - **Start.** Fetch commercial breaks and, for `.resume` / `.bookmark`, the stored position, in
-  parallel. A failure to fetch either is not fatal: play from the beginning with no breaks and
-  set `problem`. Then `engine.load(url:startAt:)` and `play()`.
+  parallel. A failure to fetch either is not fatal: a failed position fetch plays from the
+  beginning, failed breaks play with no breaks (a position that was fetched is still used), and
+  either sets `problem`. Then `engine.load(url:startAt:)` and `play()`.
 - **Position saving.** Save the resume position when `saveInterval` of clock time has passed
   since the last save while playing, on every transition to paused, and in `finish()`. Never save
   a position below `minimumResumePosition`. Saves are fire-and-forget; a failed save sets
@@ -547,6 +548,88 @@ Behaviour:
   engine and to `banner`.
 - **Failure.** `.failed` from the engine surfaces as `snapshot.status`; the view shows the error
   with Retry and Close.
+
+*Refinements* (M3-2; the skipper is wired in by M4-2, until then `banner` stays nil and
+`undoCommercialSkip()` / `acceptSkipOffer()` do nothing):
+
+- **Start.** `start()` fetches the breaks and the stored position (`resumePosition` for
+  `.resume`, `bookmark` for `.bookmark`, nothing for `.beginning`) concurrently, then calls
+  `engine.load(url: media.streamURL(for:), startAt:)` and `play()` and returns; it does not wait
+  for playback. `startAt` is nil for "from the beginning": `.beginning`, nothing stored, a stored
+  value of zero or less, or a failed fetch. `breaks` is set from the fetch, normalised as
+  `CommercialSkipper.normalise` does, and is `[]` when it failed. A second `start()` waits for the
+  first and does nothing more; `start()` after `finish()` does nothing. `start()` begins the one
+  task that reads `engine.snapshots` (read once) for the session's life.
+- **`problem`** holds the newest non-fatal problem as one of these fixed strings (internal
+  `SessionLabels`; an error's text is never shown):
+  "Couldn't load the commercial breaks." /
+  "Couldn't load your resume point, so this is playing from the beginning." /
+  "Couldn't load the bookmark, so this is playing from the beginning." /
+  "Couldn't load your resume point or the commercial breaks, so this is playing from the beginning." /
+  "Couldn't load the bookmark or the commercial breaks, so this is playing from the beginning." /
+  "Couldn't save your place." (a position save or the clear in `finish()`) /
+  "Couldn't set the bookmark." / "Couldn't mark this recording as watched."
+  A newer problem replaces an older one. A problem is cleared when the same kind of operation
+  next succeeds (a position save, a bookmark, a watched write); a start problem stays.
+- **Snapshots** are handled in one place, in order: settle a pending seek, note the trusted
+  position, count playing time, (M4-2: `skipper.tick` and its effects), decide a save, and on
+  `.ended` finish. Positions are *trusted* only in `.playing`, `.paused`, `.buffering` and
+  `.ended`; `.loading`, `.idle` and `.failed` may report 0 or stale values.
+- **Save interval.** Only clock time (the injected `now`) between a `.playing` snapshot and the
+  next snapshot counts; time paused, buffering or loading does not. When the count reaches
+  `saveInterval` on a `.playing` snapshot, the viewer's position is saved and the count restarts.
+  The count restarts only when a save is actually sent or queued, so a pause that saved nothing
+  (below the minimum) does not restart it, and at most `saveInterval` of playing time can pass
+  without a save once the position is past the minimum. An overdue save that the minimum held
+  back is sent on the first `.playing` snapshot at or past the minimum.
+- **Other saves.** A save is also requested on every transition to `.paused` and on the
+  transition to `.failed` (the place is kept when the stream drops; the last trusted position is
+  saved, not the failed snapshot's). There is no automatic retry after `.failed`.
+- **Never below the minimum.** No save of a position below `minimumResumePosition` (interval,
+  pause, failure or `finish()`). Nothing is written then: a stored position is left alone, not
+  cleared.
+- **Same value.** A save of the value the backend will hold once pending saves land (the queued
+  one, else the one in flight, else the last one this session stored successfully) is skipped. A
+  failed save does not count as stored, so the same value is sent again next time.
+- **Queue.** Saves are fire-and-forget: snapshot handling never waits for one. At most one is in
+  flight. A save requested meanwhile is queued, replacing any queued one, and is sent when the
+  one in flight ends, whether it succeeded or failed. A failed save sets `problem`; playback goes
+  on and the next save is attempted as usual.
+- **Seeks.** `skipForward` / `skipBackward` add or subtract `settings.skipForward` /
+  `skipBackward` from the *seek base*: the target of a seek the engine has not reached yet, else
+  `engine.snapshot.position`. So rapid skips add up even before the engine reports the new
+  position. Targets are clamped to `0...duration` when the duration is known and above zero,
+  else at 0 only. A seek is *pending* until a snapshot reports a position within 2 s of the
+  target, `.ended` arrives, or 3 s of clock time pass (`seekSettleTolerance` /
+  `seekSettleTime`); while pending, the target is the viewer's position for saves, the bookmark
+  and `finish()`, so a stale pre-seek position is never saved. Seeks before `start()` has loaded
+  the engine, or after `finish()`, do nothing. (M4-2: `skipper.userSeeked` is called in the same
+  place.)
+- **`togglePlayPause`** reads `engine.snapshot.status`: `.playing`, `.loading` and `.buffering`
+  pause; `.paused` plays; `.idle`, `.ended` and `.failed` do nothing. A pause the session asks
+  for is saved when the engine reports it.
+- **`setBookmarkHere`** writes the viewer's position (pending seek target, else the engine's
+  current trusted position) with `setBookmark`, and awaits it. Nothing is written without a
+  position.
+- **Finish.** `finish()` does its work once; every call, concurrent or later, returns the same
+  outcome. In order: take the final state (position as for the bookmark; `reachedEnd` when
+  `.ended` was reported; watched when `reachedEnd`, or the duration is known and above zero and
+  `position >= duration * watchedFraction`); stop reading snapshots and drop any queued save;
+  `engine.stop()`; wait for the save in flight; then, awaited: if watched, `setWatched(true)` and,
+  only if that succeeded, `setResumePosition(nil)`; otherwise (below the threshold, or the watched
+  write failed) save the final position unless it is below the minimum or already stored. So the
+  last write the backend sees is always the finish decision. `markedWatched` is true only when
+  `setWatched` succeeded. Failed writes set `problem` and the outcome is still returned. After
+  `finish()` no snapshot, control or save reaches the engine or the backend.
+- **`.ended`** makes the session finish itself (the watched write does not wait for the view);
+  the view's later `finish()` returns that outcome.
+- **Before the engine reports.** `finish()` before `start()`, or while `start()` is fetching,
+  writes nothing, never loads the engine, and returns position 0, not watched. After `start()`
+  but before any trusted position, it stops the engine, writes nothing, and returns the start
+  position.
+- **Lifetime.** The session owns its tasks. Released without `finish()`, it is freed and its
+  snapshot loop is cancelled, but no final save is possible from `deinit`: the player screen
+  must call `finish()` when it closes.
 
 ## 6. Features (`MythwatchFeatures`)
 
@@ -716,6 +799,10 @@ public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; 
 
 The app target builds exactly one `AppModel` with production implementations. Tests build it
 with fakes. This is the only place concrete types are chosen.
+
+`makePlaybackSession(_:start:)` needs a loaded session (same precondition as the other
+factories) and builds a `PlaybackSession` from that session's adapter services, a new engine from
+`makeEngine`, `settings.load().playbackSettings` read at that moment, and the model's `now`.
 
 `makeSettingsModel()` and `makeOnboardingModel()` give the new model the app's settings store,
 connector and discovery, and two closures over the `AppModel` (held weakly, so a model never keeps
@@ -1009,7 +1096,10 @@ Tests of the fake live in `MythwatchPlaybackTests`, which depends on `MythwatchT
   and its loop has come back asking for the next element, so the loop body has finished for the last
   snapshot. It returns at once if nothing was emitted, ends on cancellation, and is signalled by
   continuations, never polled. It is for one consumer that has started reading: with no consumer
-  and something emitted it waits until cancelled.
+  and something emitted it waits until cancelled. A consumer whose task was cancelled outside
+  `next()` (for example `PlaybackSession` cancelling its own loop when it finishes on `.ended`)
+  never asks for another element, so the hand-off is not signalled; the session tests then call
+  `finish()` on the fake and await the session's loop instead.
 - Everything is `@MainActor`; the queue lives in a small `Mutex`-guarded `Sendable` class so `deinit`
   can end the stream.
 
@@ -1074,7 +1164,9 @@ Tests of the fake live in `MythwatchPlaybackTests`, which depends on `MythwatchT
 
 - Test first. A task is done when its listed tests exist, were seen to fail, and now pass.
 - `cd MythwatchKit && swift test` must finish in under 10 s and touch no network, no disk outside
-  the bundle's fixtures, and no real clock (`Task.sleep` is banned in tests).
+  the bundle's fixtures, and no real clock (`Task.sleep` is banned in tests). A suite that waits
+  on suspension points may carry Swift Testing's `.timeLimit(.minutes(1))` as a deadlock guard:
+  it never affects a passing run and only turns a hang in broken code into a failure.
 - **Adapter conformance suite:** `AdapterConformance` in `MythwatchTestSupport` is a set of
   behaviour checks written against `BackendAdapter` plus a small `ConformanceScenario` protocol
   that each adapter's test target implements to supply fixtures. Every adapter must pass it.

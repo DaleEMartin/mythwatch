@@ -140,6 +140,16 @@ public struct BackendSession: Sendable {
         EpisodeDetailModel(recording: recording, state: sessionAdapter.playbackState)
     }
 
+    /// A viewing of `recording` from `start`. Needs a loaded session. Uses the session's adapter,
+    /// a new engine from `makeEngine`, the playback settings as saved now, and the model's clock.
+    public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession {
+        let adapter = sessionAdapter
+        return PlaybackSession(
+            recording: recording, start: start, engine: makeEngine(), state: adapter.playbackState,
+            markup: adapter.markup, recordings: adapter.recordings, media: adapter.media,
+            settings: settings.load().playbackSettings, now: now)
+    }
+
     /// The Settings screen's model. Needs no session: the screen is reachable while the backend
     /// is down. Saving a changed backend makes this `AppModel` connect again.
     public func makeSettingsModel() -> SettingsViewModel {
