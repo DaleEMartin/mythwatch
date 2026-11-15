@@ -121,8 +121,8 @@ getters, `V35MediaLocator`, `V35AdapterFactory`. Tests (all through `FixtureTran
 - factory: supports 35.x only; capabilities as listed in V35.
 
 ### M1-8 Conformance suite — Opus (after M1-7)
-`AdapterConformance` + `ConformanceScenario` (SPEC §9), run against the v35 adapter. (M2-3 adds
-the run against `FakeBackendAdapter`, which keeps the fake honest; the fake does not exist yet.) Checks: list returns sorted-stable unique
+`AdapterConformance` + `ConformanceScenario` (SPEC §9), run against the v35 adapter. (M2-3 added
+the run against `FakeBackendAdapter`, which keeps the fake honest.) Checks: list returns sorted-stable unique
 ids; `recording(id:)` of a listed id equals the listed value; unknown id → `.notFound`; breaks
 are sorted, non-overlapping, non-empty ranges; nil when no position; media URLs are absolute and
 under the connection's base URL; capabilities agree with which optional services are non-nil.
@@ -164,6 +164,11 @@ changing the address and reconnecting replaces the session.
 Note: `BackendConnector.connect` returns only the adapter, but `BackendSession` also needs the
 `BackendInfo` (host name). Do not probe twice to get it: change `connect` to return both (and
 update SPEC §4 and the M1-3 connector tests) as part of this task.
+`AppModel.init` takes `makeEngine: () -> any PlayerEngine`, and `PlayerEngine` does not exist
+yet: add the `PlayerEngine` protocol and its value types (`PlayerStatus`, `PlayerSnapshot`,
+`MediaTrack`) to `MythwatchPlayback` as declarations only, exactly as SPEC §5 gives them. The
+`make...Model` and `makePlaybackSession` methods of `AppModel` are added by the tasks that build
+what they return (M2-5, M2-6, M3-2), not here.
 
 ### M2-5 Library, Show, EpisodeDetail view models — Sonnet (after M2-2, M2-4)
 SPEC §6.4. Tests: load → loaded; failure → failed with retry; refresh keeps old content visible
@@ -189,7 +194,8 @@ each screen attached to the task report.
 ## Milestone 3: playback
 
 ### M3-1 `FakePlayerEngine` and playback value types — Sonnet
-SPEC §5, §8.
+SPEC §5, §8. (`PlayerEngine`, `PlayerStatus`, `PlayerSnapshot` and `MediaTrack` already exist from
+M2-4; this task adds the fake, its tests, and the remaining §5.2 value types.)
 
 ### M3-2 `PlaybackSession` without commercials — Opus (after M3-1, M2-3)
 SPEC §5.2, with the skipper stubbed to `.off`. Tests:

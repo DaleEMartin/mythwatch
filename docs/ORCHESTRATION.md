@@ -50,7 +50,12 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M2-2 done and committed** (2026-11-14): `LibraryBuilder`, `Show`, `Library`, `Season`. SPEC
   §6.1 now fixes every ordering and tie-break. On-screen choices put to the owner: watched and
   in-progress recordings appear in Recently Recorded; a repeat recording counts twice; show
-  kind and poster come from the newest recording. Next: **M2-3**, then M2-4.
+  kind and poster come from the newest recording.
+- **M2-3 done and committed** (2026-11-14): service fakes over a shared `FakeBackendStore`, with
+  call logs, error injection and continuation-based suspension (SPEC §8 "Service fake rules"),
+  `FakeBackendAdapter`, `FakeAdapterFactory`, `InMemorySettingsStore`, `FakeBackendDiscovery`.
+  The conformance suite passes against the fake unchanged. Next: **M2-4** (Opus), then M2-5
+  and M2-6. **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

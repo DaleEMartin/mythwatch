@@ -660,11 +660,11 @@ the in-app licences screen.
 | Fake | Behaviour |
 | --- | --- |
 | `FixtureTransport` | Maps method + path (+ optional query match) to a canned response or `BackendError`; records every request; an unmatched request throws `.unreachable` whose message includes the full URL (rules below) |
-| `FakeRecordingsService`, `FakePlaybackStateService`, `FakeMarkupService`, `FakeMediaLocator` | In-memory state, call log, per-call injectable error, optional suspension point to test in-flight behaviour |
-| `FakeBackendAdapter`, `FakeAdapterFactory` | Bundle of the fakes; configurable `supports` |
+| `FakeRecordingsService`, `FakePlaybackStateService`, `FakeMarkupService`, `FakeMediaLocator` | In-memory state (one shared `FakeBackendStore`), call log, per-call injectable error, optional suspension point to test in-flight behaviour (rules below; the synchronous `FakeMediaLocator` has the call log only) |
+| `FakeBackendAdapter`, `FakeAdapterFactory` | Bundle of the four fakes over one store, settable `version` and `capabilities`, `liveTV` / `videoLibrary` nil by default; the factory has a configurable `supports` closure and records each `makeAdapter` call in `makeRequests` |
 | `FakePlayerEngine` | Records calls; `emit(_ snapshot:)` drives the stream; `seek` updates position immediately |
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
-| `InMemorySettingsStore`, `FakeBackendDiscovery` | as named |
+| `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
@@ -684,6 +684,46 @@ the in-app licences screen.
   allowed and order is ignored. An empty `query` matches any query string.
 - Several matches: the route with the most query items wins. On a tie the route registered first
   wins.
+
+### Service fake rules
+
+- **Shape.** The async fakes are `final class`es made `Sendable` by a `Mutex`, not actors, so a test
+  configures and inspects them synchronously (`fake.calls`, `fake.failNext(...)`, `fake.suspend(...)`).
+  Only the service calls and `waitForParked` are awaited. The log, injection and suspension live in
+  `FakeCallRecorder` and are exposed on each fake through the `FakeCallControls` protocol.
+- **State.** The four fakes of one adapter share a `FakeBackendStore` (`add(_:resumePosition:bookmark:commercialBreaks:)`,
+  `recording(id:)`, `allRecordings`, `setCommercialBreaks(_:for:)`). `hasResumePosition` and `hasBookmark`
+  are derived from the stored positions, whatever flags a recording was added with. List order is
+  insertion order.
+- **Write semantics (docs/BACKEND-V35.md).** A write to an unknown id throws `.rejected("no such recording")`;
+  reading an unknown id's position gives nil, its breaks `[]`, and `recording(id:)` throws `.notFound`.
+  `delete` is asynchronous on a real backend, so the fake sets `deletePending`: `allRecordings()` then skips the
+  recording and `recording(id:)` still returns it. `setResumePosition` / `setBookmark` store a position; nil
+  and zero clear it; a negative position throws `.http(status: 400, message: nil)`. (The conformance suite
+  never writes, so none of this is checked by it.)
+- **Call log.** `calls` is every call in arrival order as an `Equatable` enum
+  (`FakeRecordingsService.Call.setWatched(true, id)`, `.delete(id, allowRerecord: false)`, ...), including calls
+  that failed or are parked. Each `Call` has a `method` (its `Call.Method` case, no arguments).
+- **Error injection.** `failNext(_ error, on: method = nil)` makes the next call (of that method, or any) throw
+  once; several `failNext` calls queue. `failAlways(_:on:)` makes every such call throw until
+  `clearFailures()`, which clears both kinds. A one-shot error is used before a persistent one. A failing call is
+  logged, has no effect and never parks.
+- **Suspension.** `suspend(method = nil)` parks every later call of that method (any when nil) until
+  `stopSuspending()`; `suspendNext(method = nil)` parks only the next one. A parked call has been logged but has
+  not yet changed anything. `parked` lists the parked calls, oldest first. `try await waitForParked(n = 1, of: method = nil)`
+  returns once at least n are parked (at once if they already are); it is signalled by the fake, not polled.
+  `release(_ parked, throwing: error = nil)`, `releaseNext(of:throwing:)` and `releaseAll(throwing:)` resume
+  parked calls, in any order, normally or by throwing; each returns false if nothing was parked. Cancelling
+  a parked call's task removes it from `parked` and throws `CancellationError` (no continuation leaks, a
+  call whose task is already cancelled never parks); cancelling a waiter ends `waitForParked` with `CancellationError`.
+- **`FakeMediaLocator`** builds `<baseURL path>/fake/stream/<id>`, `/fake/preview/<id>?width=` and
+  `/fake/artwork/<kind>?locator=&width=` under its `baseURL` (default `http://fake-backend:6544`), so URLs are
+  absolute and deterministic.
+- **`InMemorySettingsStore`** starts with the given value (defaults when omitted; not counted as a save).
+- **`FakeBackendDiscovery`**: `push(_ list)` delivers to every open stream. Each `discover()` returns its own
+  unbounded stream that starts with the latest pushed list, if any, so a second call does not steal from the first.
+  A dropped stream is forgotten (`activeStreamCount`); `finish()` and `deinit` end all streams, and `discover()`
+  after `finish()` returns a finished stream. `discoverCount` counts calls.
 
 ## 9. Testing rules
 
@@ -784,7 +824,7 @@ Definitions:
 **Adopting it.** An adapter's test target (which depends on `MythwatchTestSupport`) adds a type
 conforming to `ConformanceScenario` that builds its adapter over its own canned data (v35:
 `V35ConformanceScenario`, a `FixtureTransport` answering from the committed fixtures) and the
-parameterised test above. M2-3 adds the same for `FakeBackendAdapter` in `MythwatchFeaturesTests`.
+parameterised test above. `FakeBackendAdapter` has the same in `MythwatchFeaturesTests` (added in M2-3; it passed unchanged).
 
 **The suite can fail.** `MythBackendV35Tests` holds, for each check, deliberately broken adapters
 (the v35 adapter with one service or property replaced) and asserts the check reports them:
