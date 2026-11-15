@@ -236,12 +236,25 @@ private func infoFixture() throws -> Data {
         t.stub(.get, path: "/Myth/GetHostName", body: #"{"String": "backend"}"#)
         var registry = AdapterRegistry()
         registry.register(StubFactory(name: "MythTV v35", majors: [35]))
-        let adapter = try await BackendConnector(registry: registry, transport: t).connect(connection)
-        let stub = try #require(adapter as? StubAdapter)
+        let connected = try await BackendConnector(registry: registry, transport: t).connect(connection)
+        let stub = try #require(connected.adapter as? StubAdapter)
         #expect(stub.factoryName == "MythTV v35")
         #expect(stub.version.major == 35)
         #expect(stub.connection == connection)
         #expect(t.requests.first?.url.path == "/Myth/GetBackendInfo")
+    }
+
+    @Test func returnsTheProbedInfoWithoutProbingTwice() async throws {
+        let t = FixtureTransport()
+        t.stub(.get, path: "/Myth/GetBackendInfo", body: try infoFixture())
+        t.stub(.get, path: "/Myth/GetHostName", body: #"{"String": "backend"}"#)
+        var registry = AdapterRegistry()
+        registry.register(StubFactory(name: "MythTV v35", majors: [35]))
+        let connected = try await BackendConnector(registry: registry, transport: t).connect(connection)
+        #expect(connected.info.version.raw == "v35.0")
+        #expect(connected.info.hostName == "backend")
+        #expect(connected.info.version == connected.adapter.version)
+        #expect(t.requests.map(\.url.path) == ["/Myth/GetBackendInfo", "/Myth/GetHostName"])
     }
 
     @Test func unsupportedVersionSurfacesUnchanged() async throws {

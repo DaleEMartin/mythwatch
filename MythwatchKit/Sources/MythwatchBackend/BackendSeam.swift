@@ -103,6 +103,18 @@ public struct AdapterRegistry: Sendable {
     }
 }
 
+/// What `BackendConnector.connect` produces: the probed info and the adapter made for it, so a
+/// caller that needs the host name does not probe a second time.
+public struct ConnectedBackend: Sendable {
+    public let info: BackendInfo
+    public let adapter: any BackendAdapter
+
+    public init(info: BackendInfo, adapter: any BackendAdapter) {
+        self.info = info
+        self.adapter = adapter
+    }
+}
+
 public struct BackendConnector: Sendable {
     private let registry: AdapterRegistry
     private let transport: any HTTPTransport
@@ -112,10 +124,11 @@ public struct BackendConnector: Sendable {
         self.transport = transport
     }
 
-    /// Probe, resolve a factory, make the adapter. Errors from each step surface unchanged.
-    public func connect(_ connection: BackendConnection) async throws -> any BackendAdapter {
+    /// Probe once, resolve a factory, make the adapter. Errors from each step surface unchanged.
+    public func connect(_ connection: BackendConnection) async throws -> ConnectedBackend {
         let info = try await BackendProbe(transport: transport).probe(connection)
         let factory = try registry.factory(for: info.version)
-        return factory.makeAdapter(connection: connection, version: info.version, transport: transport)
+        let adapter = factory.makeAdapter(connection: connection, version: info.version, transport: transport)
+        return ConnectedBackend(info: info, adapter: adapter)
     }
 }

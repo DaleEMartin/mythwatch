@@ -176,10 +176,15 @@ while loading; `toggleWatched` optimistic update and rollback on error; `delete`
 immediately, rolls back on error, and respects `askBeforeDelete` being the view's concern (model
 exposes `delete` only); episode detail offers the right start points for each combination of
 resume position and bookmark; a failed position fetch still offers Play from Beginning.
+Add `AppModel.makeLibraryModel()` and `makeShowModel(_:)` (and an episode-detail equivalent) in
+this task. A cancelled load must not show an error (`URLSessionTransport` reports cancellation
+as `.unreachable`): check `Task.isCancelled` before publishing a failure.
 
 ### M2-6 Settings and Onboarding view models — Sonnet ∥ (after M2-4)
 Tests: test-connection states; shows adapter name; invalid address disables connect; save persists
 and triggers reconnect only when the backend changed; selecting a discovered backend fills the address.
+`adapterName` is the factory's `name`: add it to `ConnectedBackend` (SPEC §4) and `BackendSession`
+here. Add `AppModel.makeSettingsModel()` (and an onboarding equivalent) in this task.
 
 ### M2-7 Library and settings UI — Opus (after M2-5, M2-6)
 Views per SPEC §7 (Root, Onboarding, Recordings, Show, Episode detail, Settings), wired through

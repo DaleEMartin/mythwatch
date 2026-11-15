@@ -651,7 +651,8 @@ struct V35FactoryTests {
         let t = FixtureTransport()
         t.stub(.get, path: "/Myth/GetBackendInfo", body: try fixture("backend-info"))
         t.stub(.get, path: "/Myth/GetHostName", body: try fixture("hostname"))
-        let adapter = try await BackendConnector(registry: registry, transport: t).connect(connection)
-        #expect(adapter.version.major == 35)
+        let connected = try await BackendConnector(registry: registry, transport: t).connect(connection)
+        #expect(connected.adapter.version.major == 35)
+        #expect(connected.info.version.major == 35)
     }
 }

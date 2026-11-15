@@ -115,9 +115,10 @@ struct FakeAdapterFactoryTests {
         let factory = FakeAdapterFactory(supports: { $0.major == 36 })
         var registry = AdapterRegistry()
         registry.register(factory)
-        let adapter = try await BackendConnector(registry: registry, transport: transport)
+        let connected = try await BackendConnector(registry: registry, transport: transport)
             .connect(connection)
-        #expect(adapter is FakeBackendAdapter)
+        #expect(connected.adapter is FakeBackendAdapter)
+        #expect(connected.info.hostName == "box")
         #expect(factory.makeRequests.map(\.version.major) == [36])
     }
 }

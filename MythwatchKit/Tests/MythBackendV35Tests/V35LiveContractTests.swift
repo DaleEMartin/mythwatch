@@ -52,7 +52,7 @@ private struct LiveContext {
     func adapter() async throws -> any BackendAdapter {
         var registry = AdapterRegistry()
         registry.register(V35AdapterFactory())
-        return try await BackendConnector(registry: registry, transport: transport).connect(connection)
+        return try await BackendConnector(registry: registry, transport: transport).connect(connection).adapter
     }
 
     /// The listing, fetched through the adapter's production path (default page size).

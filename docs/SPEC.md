@@ -242,11 +242,18 @@ public struct BackendProbe: Sendable {
     public func probe(_ connection: BackendConnection) async throws -> BackendInfo
 }
 
+public struct ConnectedBackend: Sendable { public let info: BackendInfo; public let adapter: any BackendAdapter }
+
 public struct BackendConnector: Sendable {                      // probe + resolve + make
     public init(registry: AdapterRegistry, transport: any HTTPTransport)
-    public func connect(_ connection: BackendConnection) async throws -> any BackendAdapter
+    public func connect(_ connection: BackendConnection) async throws -> ConnectedBackend
 }
 ```
+
+`connect` returns the probed `BackendInfo` with the adapter (changed in M2-4), so a caller that
+needs the host name never probes a second time. `ConnectedBackend` lives here rather than in
+`MythwatchFeatures` because the connector cannot depend on that target; `AppModel` copies it into
+a `BackendSession`.
 
 `BackendProbe` is the only version-neutral wire code in the app. It calls `GET /Myth/GetBackendInfo`
 with `Accept: application/json` and reads `BackendInfo.Build.Version` using a tolerant decoder
@@ -463,9 +470,37 @@ Views never call a service directly.
 
 ```swift
 public enum Loadable<Value: Sendable>: Sendable { case idle, loading, loaded(Value), failed(UserMessage) }
+extension Loadable { var value: Value?; var message: UserMessage?; var isIdle: Bool; var isLoading: Bool }
+extension Loadable: Equatable where Value: Equatable {}
 public struct UserMessage: Sendable, Equatable { title: String; detail: String; canRetry: Bool }
-extension UserMessage { init(_ error: BackendError) }   // the one place BackendError becomes user text
+extension UserMessage {
+    init(_ error: BackendError)          // the one place BackendError becomes user text
+    static let unexpected: UserMessage   // any other failure; never shows the error's description
+}
 ```
+
+**Wording.** Written for someone on a sofa with a remote: what happened and what to try, in
+short sentences; no error codes, no jargon, no exclamation marks, no blame. Titles use title
+case (tvOS alert style). The strings inside `BackendError` cases (transport descriptions, HTML
+bodies, internal notes) are diagnostics and are **never shown**; the one exception is the version
+string of `.unsupportedVersion`, which the detail names. `canRetry` means trying the same thing
+again could succeed (the view offers Try Again); when it is false the detail says what to do
+instead.
+
+| Case | Title | Detail | `canRetry` |
+| --- | --- | --- | --- |
+| `.unreachable` | Can't Reach Your MythTV Backend | Make sure the backend is turned on and connected to your home network, then try again. If that doesn't help, check the address in Settings. | yes |
+| `.timedOut` | Your MythTV Backend Didn't Answer in Time | It may be busy or still starting up. Wait a moment, then try again. | yes |
+| `.http` | Your MythTV Backend Had a Problem | It couldn't answer just now. Try again in a moment. If this keeps happening, check that the address in Settings is your MythTV backend. | yes |
+| `.malformedResponse` | Mythwatch Didn't Understand the Reply | The address in Settings may not be a MythTV backend, or the backend sent something unexpected. Check the address, then try again. | yes |
+| `.notFound` | This Recording Is No Longer Available | It may have been deleted. Go back and refresh to see what's on the backend now. | no |
+| `.rejected` | Your MythTV Backend Turned That Down | It wouldn't do what Mythwatch asked, so nothing was changed. | no |
+| `.unsupportedVersion(v)` | This Version of MythTV Isn't Supported | Your backend is running MythTV *v*, which this version of Mythwatch can't work with. (Blank *v*: "running a version of MythTV, which …".) | no |
+| `.notAuthorized` | Your MythTV Backend Wants a Sign-In | Mythwatch can't sign in to a backend yet, so it can only use one that doesn't ask for a password. | no |
+| any other error (`unexpected`) | Something Went Wrong | Mythwatch ran into a problem it didn't expect. Try again. | yes |
+
+`.malformedResponse` is retryable because a cut-off reply from a busy backend is transient; a
+host that is not a MythTV backend fails the same way again and the detail points at Settings.
 
 ### 6.1 Library building (pure functions)
 
@@ -579,14 +614,14 @@ applied after trimming surrounding whitespace and newlines:
                 makeEngine: @escaping @MainActor () -> any PlayerEngine,
                 discovery: any BackendDiscovery,
                 now: @escaping @MainActor () -> ContinuousClock.Instant)
-    public private(set) var session: Loadable<BackendSession>      // .idle = no backend configured
+    public private(set) var session: Loadable<BackendSession>      // .idle = not connected and not connecting
     public func connect() async                                    // reads settings, probes, builds the adapter
-    public func makeLibraryModel() -> LibraryViewModel
-    public func makeShowModel(_ show: Show) -> ShowViewModel
-    public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession
-    public func makeSettingsModel() -> SettingsViewModel
+    public func makeLibraryModel() -> LibraryViewModel             // added by M2-5
+    public func makeShowModel(_ show: Show) -> ShowViewModel       // added by M2-5
+    public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession   // added by M3-2
+    public func makeSettingsModel() -> SettingsViewModel           // added by M2-6
 }
-public struct BackendSession: Sendable { let info: BackendInfo; let adapter: any BackendAdapter }
+public struct BackendSession: Sendable { let info: BackendInfo; let adapter: any BackendAdapter }   // public init(info:adapter:)
 
 public protocol BackendDiscovery: Sendable { func discover() -> AsyncStream<[DiscoveredBackend]> }
 public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; name: String; connection: BackendConnection }
@@ -594,6 +629,32 @@ public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; 
 
 The app target builds exactly one `AppModel` with production implementations. Tests build it
 with fakes. This is the only place concrete types are chosen.
+
+**Connection flow** (`AppModel.connect()`, built in M2-4). `init` does nothing: `session` starts
+`.idle` and settings are not read until `connect()`. Each `connect()` reads the backend address
+from the settings store, then:
+
+- **No backend configured:** any attempt in flight is cancelled, `session` becomes `.idle`, and
+  nothing is sent. So `.idle` means "not connected and not connecting": no backend configured, or
+  `connect()` not called yet. (Root decides whether to show Onboarding from the settings, not
+  from `.idle` alone.)
+- **Same address as the attempt in flight:** the call joins that attempt and returns when it
+  finishes. It does not probe again, so two concurrent calls send one probe.
+- **Different address from the attempt in flight:** the old attempt is cancelled and its outcome
+  is ignored, success or failure, whenever it arrives; only the newest attempt may change
+  `session`.
+- **While connecting:** `session` is `.loading`, except when it already holds a session loaded
+  from the same address: that session stays visible until the new outcome replaces it (as a
+  library refresh keeps old content visible, §6.4). After a failure, or for a different address,
+  it is `.loading`: an old backend's session is never shown for a new address.
+- **Outcome:** success gives `.loaded(BackendSession)`; failure gives `.failed(UserMessage)`
+  (from the `BackendError`, or `UserMessage.unexpected` for anything else), replacing any earlier
+  session. A backend that stops answering is reported, not hidden behind a stale session.
+- **Cancellation:** an attempt belongs to the model, not to the caller. Cancelling the task that
+  called `connect()` does not cancel the attempt (the caller still waits for it, and the result
+  is applied). The model cancels an attempt only when it supersedes it, and a superseded attempt
+  never touches `session`, so a cancelled request (which `URLSessionTransport` reports as
+  `.unreachable`) never becomes a message.
 
 ### 6.4 View models
 
