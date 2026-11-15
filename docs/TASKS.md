@@ -153,6 +153,8 @@ empty input → empty library.
 Service fakes, `FakeBackendAdapter`, `FakeAdapterFactory`, `InMemorySettingsStore`,
 `FakeBackendDiscovery` (SPEC §8). Tests for call logs, injected errors and suspension points.
 Also run the M1-8 conformance suite against `FakeBackendAdapter` from `MythwatchFeaturesTests`.
+`FakeBackendDiscovery` needs `BackendDiscovery` and `DiscoveredBackend` (SPEC §6.3), which no
+earlier task builds: add just those two declarations to `MythwatchFeatures` here.
 
 ### M2-4 `UserMessage`, `AppModel`, connection flow — Opus (after M2-1, M2-3)
 SPEC §6.3. Tests: no backend configured → `.idle`; success → `.loaded` with info and adapter;

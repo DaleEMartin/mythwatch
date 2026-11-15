@@ -35,7 +35,9 @@ let package = Package(
             dependencies: ["MythBackendV35", "MythwatchTestSupport"],
             resources: [.copy("Fixtures")]),
         .testTarget(name: "MythwatchPlaybackTests", dependencies: ["MythwatchPlayback"]),
-        .testTarget(name: "MythwatchFeaturesTests", dependencies: ["MythwatchFeatures"]),
+        .testTarget(
+            name: "MythwatchFeaturesTests",
+            dependencies: ["MythwatchFeatures", "MythwatchTestSupport"]),
     ],
     swiftLanguageModes: [.v6]
 )

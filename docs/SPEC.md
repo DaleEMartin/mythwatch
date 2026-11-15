@@ -484,17 +484,37 @@ public enum LibraryBuilder {
 }
 ```
 
-- **Grouping key:** `seriesKey` when present, otherwise the title lower-cased and trimmed. Two
-  recordings with the same title but different `seriesKey` are different shows.
-- **Show title:** the most common title in the group. **Poster:** the newest recording's poster.
-- **Shows order:** by `sortTitle` (case-insensitive, leading "The ", "A ", "An " ignored).
-- **Continue Watching:** `hasResumePosition && !watched && !deletePending`, newest `lastModified`
-  first, at most 20.
-- **Recently Recorded:** newest `recordingStart` first, at most 20, excluding `deletePending`.
-- **Seasons:** grouped by `season`; numbered seasons ascending, then `nil` titled "Other
-  Episodes". Inside a season: by `episode` ascending, then `recordingStart`. Movies (`kind ==
-  .movie`) get one unnamed season.
-- `deletePending` recordings are excluded everywhere.
+Input order never matters: the same recordings in any order give an identical `Library`. All
+string comparison is Swift's `String <` (Unicode canonical order, no locale), so "10" sorts before
+"2". `deletePending` recordings are dropped first and take no part in anything below; a show whose
+recordings are all `deletePending` does not exist. "Newer" means later `recordingStart`, then
+higher `id`.
+
+- **Normalised title:** case- and diacritic-folded (`locale: nil`), surrounding whitespace removed,
+  inner whitespace runs collapsed to one space.
+- **Grouping key and `Show.id`:** `"series:" + seriesKey` when `seriesKey` is non-blank, otherwise
+  `"title:" + normalised title`. The id is the key, so it is stable across refreshes and a keyed
+  show cannot collide with a title show. A keyless recording never joins a keyed group; two
+  recordings with the same title but different keys are different shows.
+- **Show title:** the most common title in the group (compared after trimming surrounding
+  whitespace); a tie goes to the smaller title.
+- **Show fields:** `kind` is the newest recording's kind. `poster` is the first `.poster` artwork of
+  the newest recording that has one, else nil. `newest` is the latest `recordingStart`.
+  `recordings` is newest first. `episodeCount` counts recordings (the same episode recorded twice
+  counts twice); `unwatchedCount` counts those without `watched`.
+- **`sortTitle`:** the normalised title with leading non-alphanumeric characters dropped, then a
+  leading "the ", "a " or "an " dropped only when more text follows it ("The", "A" and "An" keep
+  their names). A title with no letters or digits keeps its punctuation; a blank title gives "".
+- **Shows order:** by `sortTitle`, then by title, then by id.
+- **Continue Watching:** `hasResumePosition && !watched` (recordings still being recorded are
+  included), newest `lastModified` first, ties newer first, at most 20 after filtering and sorting.
+- **Recently Recorded:** newer first, at most 20. Watched and in-progress recordings are included.
+- **Seasons:** grouped by `season`; numbered seasons ascending (`id` the number, title "Season 3"),
+  then the `nil` group (`id` nil, title "Other Episodes"), which is also the only season of a show
+  with no season numbers. Inside a season: `episode` ascending with no episode number last, then
+  `recordingStart` ascending, then `id` ascending. A show whose `kind` is `.movie` gets one season
+  (`id` nil, title "") holding all its recordings (several airings), ordered by `recordingStart`
+  ascending then `id`. A show with no recordings has no seasons.
 
 ### 6.2 Settings
 

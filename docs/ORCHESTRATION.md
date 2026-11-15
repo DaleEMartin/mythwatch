@@ -46,7 +46,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M2-1 done and committed** (2026-11-14): `AppSettings`, `UserDefaultsSettingsStore`,
   `BackendAddress.parse`, and `CommercialSkipMode` added early to `MythwatchPlayback`. Tests
   must never use `UserDefaults(suiteName:)`: it leaves a plist in `~/Library/Preferences` per
-  suite; use the in-memory subclass in `AppSettingsTests.swift`. Next: **M2-2**, then M2-3.
+  suite; use the in-memory subclass in `AppSettingsTests.swift`.
+- **M2-2 done and committed** (2026-11-14): `LibraryBuilder`, `Show`, `Library`, `Season`. SPEC
+  §6.1 now fixes every ordering and tie-break. On-screen choices put to the owner: watched and
+  in-progress recordings appear in Recently Recorded; a repeat recording counts twice; show
+  kind and poster come from the newest recording. Next: **M2-3**, then M2-4.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not
