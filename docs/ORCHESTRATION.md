@@ -38,7 +38,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **M1-8 done and committed** (2026-11-14): `AdapterConformance` (8 checks, SPEC §9.1), passing
   for v35 and proven to fail against broken adapters. M2-3 must add `MythwatchTestSupport` to
   `MythwatchFeaturesTests` and run the suite against `FakeBackendAdapter`.
-  Next: **M1-9** (live, GET only), then the Milestone 1 status to the owner.
+- **M1-9 done and committed** (2026-11-14): live read-only suite, skipped unless
+  `MYTHWATCH_LIVE_BACKEND` is set. Passed against basement (307 recordings, list in 0.24 s,
+  list and single-recording endpoints agree, stream URL answers a ranged GET with 206).
+  **Milestone 1 is complete.** Still `[verify]`: the `{"bool": ...}` reply and clearing with
+  `Offset=0` (both need a write, M3-5), Bonjour TXT (M5-2). Next: **M2-1**, then M2-2, M2-3.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not
