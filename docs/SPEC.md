@@ -577,8 +577,7 @@ Behaviour:
 - **Failure.** `.failed` from the engine surfaces as `snapshot.status`; the view shows the error
   with Retry and Close.
 
-*Refinements* (M3-2; the skipper is wired in by M4-2, until then `banner` stays nil and
-`undoCommercialSkip()` / `acceptSkipOffer()` do nothing):
+*Refinements* (M3-2; commercials M4-2):
 
 - **Start.** `start()` fetches the breaks and the stored position (`resumePosition` for
   `.resume`, `bookmark` for `.bookmark`, nothing for `.beginning`) concurrently, then calls
@@ -600,8 +599,8 @@ Behaviour:
   A newer problem replaces an older one. A problem is cleared when the same kind of operation
   next succeeds (a position save, a bookmark, a watched write); a start problem stays.
 - **Snapshots** are handled in one place, in order: settle a pending seek, note the trusted
-  position, count playing time, (M4-2: `skipper.tick` and its effects), decide a save, and on
-  `.ended` finish. Positions are *trusted* only in `.playing`, `.paused`, `.buffering` and
+  position, count playing time, `skipper.tick` and its effects (see **Commercials** below),
+  decide a save, and on `.ended` finish. Positions are *trusted* only in `.playing`, `.paused`, `.buffering` and
   `.ended`; `.loading`, `.idle` and `.failed` may report 0 or stale values.
 - **Save interval.** Only clock time (the injected `now`) between a `.playing` snapshot and the
   next snapshot counts; time paused, buffering or loading does not. When the count reaches
@@ -631,8 +630,8 @@ Behaviour:
   target, `.ended` arrives, or 3 s of clock time pass (`seekSettleTolerance` /
   `seekSettleTime`); while pending, the target is the viewer's position for saves, the bookmark
   and `finish()`, so a stale pre-seek position is never saved. Seeks before `start()` has loaded
-  the engine, or after `finish()`, do nothing. (M4-2: `skipper.userSeeked` is called in the same
-  place.)
+  the engine, or after `finish()`, do nothing. Each then calls `skipper.userSeeked` with the
+  clamped target.
 - **`togglePlayPause`** reads `engine.snapshot.status`: `.playing`, `.loading` and `.buffering`
   pause; `.paused` plays; `.idle`, `.ended` and `.failed` do nothing. A pause the session asks
   for is saved when the engine reports it.
@@ -655,6 +654,61 @@ Behaviour:
   writes nothing, never loads the engine, and returns position 0, not watched. After `start()`
   but before any trusted position, it stops the engine, writes nothing, and returns the start
   position.
+- **Commercials** (M4-2).
+  - *The skipper* is made in `start()` when the fetches are over, from the fetched breaks (none
+    when the fetch failed) and `settings.commercialSkip`, so the mode is the one in the settings
+    then. The session has no way to change the mode mid-playback: §7 puts the mode in Settings,
+    not on the player screen. (`CommercialSkipper.setMode`, R11, is there for the day a
+    player-screen control is wanted: a new session method applying its effects as below.)
+    `breaks` is `skipper.breaks`, in every mode.
+  - *Effects* from `tick`, `userSeeked`, `undo` and `acceptOffer` are applied by one private
+    method, in the order returned: `.seek` is an engine seek that is pending like a user's
+    (below); `.showSkipped` sets `banner = .skipped`, `.offerSkip` sets `banner = .offer`;
+    `.hideSkipped` and `.withdrawOffer` clear `banner` only when it is of that kind. One banner
+    at a time, the newer replacing the older: an accepted offer ends on the skipped banner, an
+    undo on none, a second skip replaces the first banner, and in prompt mode an offer for a
+    following break that starts during a skipped banner's undo window replaces that banner (its
+    later `.hideSkipped` leaves the offer alone; its undo is no longer on screen).
+  - *Ticks* happen in `handle(_:)` after the playing time is counted and before the save
+    decision, on `.playing` and `.buffering` snapshots only, with the viewer's position (a
+    pending seek's target, else the snapshot's position), the snapshot's duration and `now`.
+    Why the viewer's position: an engine may report pre-seek positions for a moment after any
+    seek. Fed to the skipper, a stale position before a break the viewer has just skipped into
+    re-arms that break (R1's backwards rule) and it is skipped when the engine arrives, breaking
+    R3; in prompt mode a stale report back across the start of a break just skipped re-offers
+    it. The target hides those. Once the seek settles (2 s / 3 s, above) the engine's position
+    is used again, so an engine that lags more than 3 s can still cause them. Not `.paused`: a
+    paused picture never jumps; a break the engine first reports being inside while paused is
+    skipped on the next `.playing` snapshot, and the undo window starts then. Not `.ended`: the
+    session finishes on it. Not `.idle`, `.loading` or `.failed`: untrusted (a loading engine
+    reporting 0 while resuming at 20 minutes must not skip a break at 0).
+  - *Automatic seeks* (a skip, an accepted offer, an undo) set the pending seek as the viewer's
+    seeks do, so saves, the bookmark, `finish()` and the base of `skipForward` / `skipBackward`
+    use the target while the engine catches up. They never call `userSeeked` (only
+    `skipForward`, `skipBackward` and `seek(to:)` do): that would hide the banner the skipper
+    has just shown and end its undo.
+  - *Saves around a skip.* Because the tick comes before the save decision, a save due on the
+    snapshot that skips stores the landing point. A pause or interval save just after a skip
+    stores the landing point even while the engine still reports the break; after an undo the
+    next save is the undo target.
+  - *Start position.* Resuming (`.resume`) inside a break skips it on the first tick, with the
+    banner and its undo: the stored place is where playback last stopped (an interval or pause
+    save during the adverts), not a place the viewer chose. Starting at a bookmark inside a
+    break plays it: the session calls `userSeeked(to: bookmark)` before the first tick, as if
+    the viewer had scrubbed there (R3); this also starts a quiet period.
+  - *`undoCommercialSkip()` / `acceptSkipOffer()`* do nothing unless the session is active
+    (before `start()` has loaded the engine, or after `finish()`). `acceptSkipOffer()` skips from
+    the viewer's position, taken as for the bookmark. `undoCommercialSkip()` after the undo
+    window does nothing to playback, and clears a skipped banner that is still showing.
+  - *Banner expiry.* The skipper hides the skipped banner on the first tick at or after
+    `undoUntil`, and there are no ticks while paused (an engine may emit nothing then). There is
+    no timer: the view hides the skipped banner, and its Go back, when its own clock passes the
+    banner's `undoUntil`, and a Go back pressed after that clears the banner (above). The undo
+    window is clock time and keeps running while paused.
+  - *Finish.* `finish()` clears `banner`. Finishing during the undo window keeps the landing
+    point as the final position (the pending target if the engine has not caught up). After
+    `finish()` nothing ticks, and undo and accept do nothing.
+  - *End guard.* A break guarded by R5 plays, and the recording finishes as any other.
 - **Lifetime.** The session owns its tasks. Released without `finish()`, it is freed and its
   snapshot loop is cancelled, but no final save is possible from `deinit`: the player screen
   must call `finish()` when it closes.

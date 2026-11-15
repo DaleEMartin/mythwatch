@@ -97,7 +97,19 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **Chained landing done and committed** (2026-11-15): SPEC §5.1 R2 "Chaining". One skip lands
   after every break that would start during its quiet period; undo suppresses the whole chain.
   Told to the owner: programme in gaps under 2 s between chained breaks is skipped too.
-  Next: **M4-2**, the last task that does not need the owner.
+- **M4-2 done and committed** (2026-11-15): the skipper is wired into `PlaybackSession` (SPEC
+  §5.2 "Commercials"); 27 mutations checked. Package tests, the tvOS app UI test, the iOS
+  package build and the live read-only suite were all re-run after it and pass.
+  For M4-3: the view must hide the skipped banner when its own clock passes `undoUntil`
+  (no ticks arrive while paused); all banner wording is M4-3's.
+  For M0-3, in addition to the earlier questions: does VLC report `.playing` / `.buffering` at
+  a position other than `startAt` just after `load` (a break at 0 could then fire on resume)?
+  How long are positions stale after a seek (over 3 s defeats the settle rule)? Does it emit
+  snapshots while paused?
+- **Every task that can run without the owner is done.** Remaining, all needing the owner:
+  **M0-3** (VLCKit spike, real Apple TV; go/no-go), **M2-7** (library and settings UI), then
+  M3-3, M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
+  session; do not launch them unattended.
   **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

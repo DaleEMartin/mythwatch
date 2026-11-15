@@ -27,8 +27,9 @@ enum SessionLabels {
 /// - `start()` fetches the breaks and (for `.resume` / `.bookmark`) the stored position at the
 ///   same time, then loads and plays the engine and returns. It starts one task that reads
 ///   `engine.snapshots` for the session's life; `finish()` ends it, and so does `deinit`.
-/// - Every snapshot goes through `handle(_:)`, the one place the session reacts to the engine
-///   (M4-2 adds the commercial skipper there).
+/// - Every snapshot goes through `handle(_:)`, the one place the session reacts to the engine.
+///   The commercial skipper is ticked there with the viewer's position; its effects, from a
+///   tick, a user seek, an undo or an accepted offer, are applied in one place, `apply(_:)`.
 /// - Position saves are fire-and-forget and go through one queue: at most one in flight, and
 ///   the newest waiting position replaces an older one. `finish()` waits for the save in
 ///   flight, drops the waiting one, and then writes the final value itself, so nothing older
@@ -39,7 +40,8 @@ enum SessionLabels {
     public private(set) var snapshot: PlayerSnapshot
     /// Normalised; for the scrubber, whatever the skip mode.
     public private(set) var breaks: [CommercialBreak] = []
-    /// Always nil until the skipper is wired in (M4-2).
+    /// The commercial banner: the skipped one with its undo, or the Skip button (prompt mode).
+    /// One at a time; the newer replaces the older. Cleared by `finish()`.
     public private(set) var banner: SkipBanner?
     /// The newest non-fatal problem, in plain words; nil when there is none.
     public private(set) var problem: String?
@@ -85,6 +87,8 @@ enum SessionLabels {
     @ObservationIgnored private(set) var snapshotLoop: Task<Void, Never>?
     @ObservationIgnored private var finishTask: Task<PlaybackOutcome, Never>?
     @ObservationIgnored private var problemKind: ProblemKind?
+    /// Replaced at start, once the breaks are known; the mode comes from the settings then.
+    @ObservationIgnored private var skipper: CommercialSkipper
 
     // What the engine has said.
     @ObservationIgnored private var startPosition: Duration?
@@ -124,6 +128,7 @@ enum SessionLabels {
         self.settings = settings
         self.now = now
         self.snapshot = engine.snapshot
+        self.skipper = CommercialSkipper(breaks: [], config: settings.commercialSkip)
     }
 
     deinit {
@@ -155,7 +160,8 @@ enum SessionLabels {
         let (breaksResult, startResult) = await (fetchedBreaks, fetchedStart)
         guard phase == .starting else { return }  // finished while fetching
 
-        breaks = CommercialSkipper.normalise(breaksResult ?? [])
+        skipper = CommercialSkipper(breaks: breaksResult ?? [], config: settings.commercialSkip)
+        breaks = skipper.breaks  // normalised
         var startAt: Duration?
         var positionFailed = false
         switch startResult {
@@ -171,6 +177,11 @@ enum SessionLabels {
 
         startPosition = startAt
         phase = .active
+        if startPoint == .bookmark, let startAt {
+            // The viewer chose this place: a break it lies inside plays (R3), as after a seek.
+            // A resume position is where playback last stopped, so a break there is skipped.
+            apply(skipper.userSeeked(to: startAt, now: now()))
+        }
         startSnapshotLoop()
         engine.load(url: media.streamURL(for: recording), startAt: startAt)
         engine.play()
@@ -231,8 +242,10 @@ enum SessionLabels {
         if new.status == .ended { endedSeen = true }
         countPlayingTime(new, at: instant)
 
-        // M4-2: the commercial skipper ticks here, every snapshot:
-        // apply(skipper.tick(position: new.position, duration: new.duration, now: instant)).
+        // Before the save decision, so a save due on the snapshot that skips stores the landing.
+        if Self.ticksSkipper(new.status), let position = viewerPosition {
+            apply(skipper.tick(position: position, duration: new.duration, now: instant))
+        }
 
         if new.status == .paused, previous.status != .paused {
             requestSave(viewerPosition)
@@ -252,6 +265,13 @@ enum SessionLabels {
         case .playing, .paused, .buffering, .ended: true
         case .idle, .loading, .failed: false
         }
+    }
+
+    /// Only while playback is moving or about to. Not `.paused`: a skip never moves a paused
+    /// picture (and its undo window would run out unseen); it happens when play resumes. Not
+    /// `.ended`: the session finishes on it. Not `.idle`, `.loading`, `.failed`: untrusted.
+    private static func ticksSkipper(_ status: PlayerStatus) -> Bool {
+        status == .playing || status == .buffering
     }
 
     private static func isFailed(_ status: PlayerStatus) -> Bool {
@@ -376,16 +396,53 @@ enum SessionLabels {
         guard phase == .active else { return }
         var target = max(requested, .zero)
         if let duration = engine.snapshot.duration, duration > .zero { target = min(target, duration) }
-        pendingSeek = PendingSeek(target: target, at: now())
-        engine.seek(to: target)
-        // M4-2: apply(skipper.userSeeked(to: target, now: now())) here.
+        seekEngine(to: target)
+        apply(skipper.userSeeked(to: target, now: now()))
     }
 
-    /// Does nothing until the skipper is wired in (M4-2).
-    public func undoCommercialSkip() {}
+    /// Every seek, the viewer's or the skipper's: pending until the engine reports it, so a
+    /// stale position is not saved or ticked and rapid skips add up from the target. Never
+    /// tells the skipper; only `userSeek` does that.
+    private func seekEngine(to target: Duration) {
+        pendingSeek = PendingSeek(target: target, at: now())
+        engine.seek(to: target)
+    }
 
-    /// Does nothing until the skipper is wired in (M4-2).
-    public func acceptSkipOffer() {}
+    /// "Go back" on the skipped banner. After the undo window there is nothing to undo, and a
+    /// skipped banner still showing (no snapshot came to hide it, as while paused) is cleared.
+    public func undoCommercialSkip() {
+        guard phase == .active else { return }
+        let effects = skipper.undo(now: now())
+        apply(effects)
+        if effects.isEmpty, case .skipped = banner { banner = nil }
+    }
+
+    /// Skip on the offer (prompt mode), from where the viewer is now.
+    public func acceptSkipOffer() {
+        guard phase == .active, let position = viewerPositionNow else { return }
+        apply(skipper.acceptOffer(position: position, now: now()))
+    }
+
+    /// The one place skipper effects are carried out, in the order given (SPEC 5.1 "Effect
+    /// order"). A removal clears the banner only if it is that kind, so an accepted offer
+    /// (`.seek, .withdrawOffer, .showSkipped`) ends showing the skipped banner, and a late
+    /// `.hideSkipped` never removes a newer offer.
+    private func apply(_ effects: [SkipEffect]) {
+        for effect in effects {
+            switch effect {
+            case .seek(let target):
+                seekEngine(to: target)
+            case .showSkipped(let skipped, let undoUntil):
+                banner = .skipped(skipped, undoUntil: undoUntil)
+            case .hideSkipped:
+                if case .skipped = banner { banner = nil }
+            case .offerSkip(let offered):
+                banner = .offer(offered)
+            case .withdrawOffer:
+                if case .offer = banner { banner = nil }
+            }
+        }
+    }
 
     /// Stores the viewer's position as the bookmark. A failure sets `problem`.
     public func setBookmarkHere() async {
@@ -415,6 +472,7 @@ enum SessionLabels {
         if phase == .active {
             let final = finalState()  // before stop(), which may reset the position
             phase = .finishing
+            banner = nil  // nothing on it can act any more
             snapshotLoop?.cancel()
             queuedSave = nil
             engine.stop()

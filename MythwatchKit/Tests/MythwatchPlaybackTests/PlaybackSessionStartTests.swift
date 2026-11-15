@@ -99,8 +99,9 @@ struct PlaybackSessionStartTests {
         #expect(rig.session.breaks == [cb(60, 180), cb(600, 700)])
     }
 
-    @Test func noBannerAndNoSkippingWithoutTheSkipper() async {
-        let rig = SessionRig(breaks: [cb(0, 120)])
+    @Test func noBannerAndNoSkippingWhenCommercialSkipIsOff() async {
+        // Until M4-2 this checked the session without a skipper; now that applies only in Off.
+        let rig = SessionRig(breaks: [cb(0, 120)], settings: skipSettings(.off))
         await rig.playing(at: s(30))
         rig.session.acceptSkipOffer()
         rig.session.undoCommercialSkip()

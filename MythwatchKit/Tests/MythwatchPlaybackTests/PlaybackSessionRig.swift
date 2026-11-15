@@ -159,4 +159,30 @@ let hour: Duration = .seconds(3600)
 
     /// The engine calls made after the first `count`.
     func engineCalls(after count: Int) -> [FakePlayerEngine.Call] { Array(engine.calls.dropFirst(count)) }
+
+    // MARK: commercials (M4-2)
+
+    /// Every `seek` the engine was asked for, in order: the viewer's and the skipper's.
+    var seeks: [Duration] {
+        engine.calls.compactMap { if case .seek(let to) = $0 { to } else { nil } }
+    }
+
+    /// While the engine is playing, moves the clock and the position on together in steps of
+    /// `step` until the position reaches `position`, waiting for the session after each step.
+    /// Stops early if the engine stops playing; a skip that jumps past `position` ends it too.
+    func play(to position: Duration, step: Duration = .seconds(1)) async {
+        while engine.snapshot.status == .playing, engine.snapshot.position < position {
+            await play(for: step)
+        }
+    }
+
+    /// The banner a skip made now would show: `skipped` jumped, undo offered for the default window.
+    func skippedBanner(_ skipped: Duration) -> SkipBanner {
+        .skipped(skipped, undoUntil: clock.now() + CommercialSkipConfig().undoWindow)
+    }
+}
+
+/// Default settings with this commercial-skip mode.
+func skipSettings(_ mode: CommercialSkipMode) -> PlaybackSettings {
+    PlaybackSettings(commercialSkip: CommercialSkipConfig(mode: mode))
 }
