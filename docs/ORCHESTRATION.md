@@ -170,6 +170,16 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `tick()`). For later: the show page underneath is not refreshed after playback (the library and
   episode page are); the swipe-down panel and scrubbing cannot be driven by XCUIRemote, so they were
   checked by hand only.
+- **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
+  City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
+  `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its
+  watched flag, resume position and bookmark; M5-1 may delete it, and the owner is fine with it
+  being deleted at the end. No other recording may receive a POST.
+- **Delete and re-recording** (owner, 2026-11-15, for M5-1): **ask each time.** The delete
+  confirmation offers both choices (let MythTV record the episode again, or not), on the show
+  page and the episode page; `allowRerecord` follows the choice. Today `ShowViewModel.delete`
+  always sends `false`, and `EpisodeDetailModel.delete()` must be checked too; both need a
+  parameter, test first, with SPEC §6.4 lines.
 - **Every task that can run without the owner is done.** Remaining, all needing the owner:
   M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
   session; do not launch them unattended.

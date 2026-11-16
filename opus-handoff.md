@@ -183,6 +183,9 @@ per model. Things the models already decided that the views must respect:
 
 ### M3-5 Write path (owner must nominate a recording)
 
+- **Nominated (owner, 2026-11-15): recording 3749**, *Amber Street Sessions*, "Sebastián Yatra". Use
+  only that one. Confirm it by GET before the first write.
+
 - Ask the owner which recording to use before sending anything. Use only that one.
 - This task settles the two write-side `[verify]` items in `BACKEND-V35.md`: the shape of the
   `{"bool": ...}` reply, and whether `Offset=0` clears a stored position. Update the markers.
@@ -200,6 +203,10 @@ per model. Things the models already decided that the views must respect:
 - All banner wording is this task's. None exists yet.
 
 ### M5-1 Delete
+
+- **Nominated (owner, 2026-11-15): recording 3749**, the same as M3-5; the owner is fine with it
+  being deleted at the end. **Re-recording: ask each time** (owner, 2026-11-15): the confirmation
+  offers both choices and `allowRerecord` follows it, on both pages.
 
 - `ShowViewModel.delete` always sends `allowRerecord: false`. Ask the owner whether deleting
   should let MythTV record the programme again; it changes how their DVR behaves.
