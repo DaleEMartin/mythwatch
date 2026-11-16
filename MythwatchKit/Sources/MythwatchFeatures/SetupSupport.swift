@@ -8,6 +8,12 @@ import MythwatchDomain
 enum SetupLabels {
     static let invalidAddress =
         "That doesn't look like an address. Try something like 192.168.1.20 or mybackend.local."
+
+    /// tvOS does not resolve a bare host name (seen on the owner's Apple TV in M2-7, through both
+    /// `URLSession` and VLC); the same name with `.local` works.
+    static func bareName(_ host: String) -> String {
+        "Apple TV usually can't find a backend by its name alone. Try \(host).local, or the backend's IP address."
+    }
 }
 
 /// What the address field holds, as the models see it.
@@ -33,6 +39,20 @@ enum AddressInput: Equatable {
     }
 
     var isInvalid: Bool { self == .invalid }
+
+    /// The hint under the address field: why invalid text is not an address, or, for a valid
+    /// bare host name (one label, not an IP literal, not `localhost`), the `.local` suggestion.
+    var hint: String? {
+        switch self {
+        case .empty: return nil
+        case .invalid: return SetupLabels.invalidAddress
+        case .valid(let connection):
+            guard let host = connection.baseURL.host(percentEncoded: false), !host.contains("."),
+                !host.contains(":"), !host.hasPrefix("["), host != "localhost"
+            else { return nil }
+            return SetupLabels.bareName(host)
+        }
+    }
 
     /// The text that stands for `connection` in the address field. Always parses back to the same
     /// connection: plain `host:port` for http, with the scheme kept for https.

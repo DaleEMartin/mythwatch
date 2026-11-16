@@ -54,7 +54,7 @@ mythwatch/
   Mythwatch/                       tvOS app
     Mythwatch.xcodeproj
     Info.plist
-    Mythwatch/                     SwiftUI views, VLCPlayerEngine, AppEnvironment wiring
+    Mythwatch/                     SwiftUI views, VLCPlayerEngine, App/Composition.swift (composition root)
     MythwatchUITests/
   Tools/capture-fixtures.sh  Tools/check-deps.sh
 ```
@@ -64,7 +64,8 @@ mythwatch/
 `Package.swift` declares these dependencies but does not enforce them on its own: in a debug
 build SwiftPM (seen on Swift 6.4.2) lets a target import any module that is already built and
 only prints a "missing a dependency" warning. `Tools/check-deps.sh` scans the imports and fails
-on any that the table does not allow. Run it with `swift test`; keep its table identical to this one.
+on any that the table does not allow, in the package and in the app target (the app's UI tests
+may import none of our modules). Run it with `swift test`; keep its table identical to this one.
 
 | Target | May depend on |
 | --- | --- |
@@ -74,7 +75,7 @@ on any that the table does not allow. Run it with `swift test`; keep its table i
 | `MythwatchPlayback` | `MythwatchDomain` |
 | `MythwatchFeatures` | `MythwatchDomain`, `MythwatchBackend`, `MythwatchPlayback` |
 | `MythwatchTestSupport` | all of the above except `MythBackendV35` |
-| App target | `MythwatchFeatures`, `MythBackendV35` (registration only), VLCKit |
+| App target | `MythwatchFeatures` and the layers under it (`MythwatchDomain`, `MythwatchBackend`, `MythwatchPlayback`) for their types; `MythBackendV35` in `App/Composition.swift` only (registration); `MythwatchTestSupport` in `App/Composition.swift` only, inside `#if DEBUG`, and linked into Debug builds only (§7 "UI tests"); VLCKit in `VLCPlayerEngine.swift` only |
 
 Each test target depends on the target it tests and may also depend on `MythwatchTestSupport`
 (and through it on the targets that one may use). `MythwatchTestSupport` has no test target of
@@ -901,8 +902,10 @@ applied after trimming surrounding whitespace and newlines:
     public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession   // added by M3-2
     public func makeSettingsModel() -> SettingsViewModel           // added by M2-6
     public func makeOnboardingModel() -> OnboardingViewModel       // added by M2-6
+    public func makeArtwork() -> ArtworkURLs                       // added by M2-7; needs a loaded session
+    public var savedSettings: AppSettings { get }                  // added by M2-7; reads the store each time, not observed
 }
-public struct BackendSession: Sendable { let info: BackendInfo; let adapter: any BackendAdapter; let adapterName: String }   // public init(info:adapter:adapterName:)
+public struct BackendSession: Sendable, Identifiable { let id: UUID; let info: BackendInfo; let adapter: any BackendAdapter; let adapterName: String }   // public init(info:adapter:adapterName:); id is new for every session made
 
 public protocol BackendDiscovery: Sendable { func discover() -> AsyncStream<[DiscoveredBackend]> }
 public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; name: String; connection: BackendConnection }
@@ -914,6 +917,12 @@ with fakes. This is the only place concrete types are chosen.
 `makePlaybackSession(_:start:)` needs a loaded session (same precondition as the other
 factories) and builds a `PlaybackSession` from that session's adapter services, a new engine from
 `makeEngine`, `settings.load().playbackSettings` read at that moment, and the model's `now`.
+
+`makeEpisodeDetailModel(_:)` wires the model's `onChange` to the newest library model and the
+newest show model made by `makeShowModel(_:)` (both held weakly), so a delete on the episode page
+is right on the show page and in the library when the user goes back, with no fetch. `savedSettings`
+is how Root decides Onboarding (§7) and how pages read `askBeforeDelete`. `BackendSession.id` lets the
+Recordings tab tell a new session (another backend, or a reconnect) from the one it shows.
 
 `makeSettingsModel()` and `makeOnboardingModel()` give the new model the app's settings store,
 connector and discovery, and two closures over the `AppModel` (held weakly, so a model never keeps
@@ -951,19 +960,27 @@ from the settings store, then:
 | View model | State | Actions |
 | --- | --- | --- |
 | `LibraryViewModel` | `library: Loadable<Library>`, `isRefreshing`, `refreshProblem: UserMessage?` | `load()`, `refresh()`, `reloadAfterPlayback()`, `apply(_ change: RecordingChange)` |
-| `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:)`, `dismissProblem()` |
-| `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?` | `load()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
+| `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:)`, `dismissProblem()`, `apply(_ change: RecordingChange)` |
+| `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?`, `isDeleting`, `isDeleted` | `load()`, `delete()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
 | `SettingsViewModel` | `addressText`, `commercialSkipMode`, `skipForwardSeconds`, `skipBackwardSeconds`, `deinterlace`, `askBeforeDelete` (all editable); `connectionTest: Loadable<BackendInfo>`, `backendInfo`, `adapterName: String?`, `addressHint`, `discovered`, `canTestConnection`, `canSave`, `hasUnsavedChanges`, `isReconnecting`, `reconnectProblem: UserMessage?`, `editedSettings: AppSettings?` | `testConnection()`, `save()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
 | `OnboardingViewModel` | `addressText` (editable); `connectionTest`, `connectState: Loadable<BackendInfo>`, `adapterName`, `addressHint`, `discovered`, `canTestConnection`, `canConnect`, `isConnecting` | `testConnection()`, `connect()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
 
 ```swift
 LibraryViewModel(recordings: any RecordingsService)
 ShowViewModel(show: Show, recordings: any RecordingsService, onChange: (@MainActor (RecordingChange) -> Void)? = nil)
-EpisodeDetailModel(recording: Recording, state: any PlaybackStateService)
+EpisodeDetailModel(recording: Recording, state: any PlaybackStateService, recordings: any RecordingsService,
+                   onChange: (@MainActor (RecordingChange) -> Void)? = nil)
 SettingsViewModel(settings: any SettingsStore, connector: BackendConnector, discovery: any BackendDiscovery,
                   session: @MainActor () -> Loadable<BackendSession>, reconnect: @MainActor () async -> Void)
 OnboardingViewModel(...)   // the same five parameters
-// toggleWatched(_:) and delete(_:) are `@discardableResult` and return Task<Void, Never>
+// toggleWatched(_:), delete(_:) and EpisodeDetailModel.delete() are `@discardableResult` and return Task<Void, Never>
+public struct ArtworkURLs: Sendable {   // pure; asks the MediaLocator for URLs and sends nothing
+    public init(media: any MediaLocator)
+    public func poster(for show: Show, maxWidth: Int) -> [URL]
+    public func poster(for recording: Recording, maxWidth: Int) -> [URL]
+    public func fanart(for show: Show, maxWidth: Int) -> URL?
+    public func thumbnail(for recording: Recording, maxWidth: Int) -> [URL]
+}
 public enum RecordingChange: Sendable, Equatable { case watched(RecordingID, Bool); case deleted(RecordingID) }
 public struct StartOption: Identifiable, Sendable, Equatable {   // ready to render
     public var point: StartPoint; public var title: String; public var position: Duration?; public var id: String
@@ -1028,6 +1045,11 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   when the user goes back, with no fetch. A fetch already running when a change is applied predates
   it, so its answer is dropped and the list is fetched again. Failed and rolled-back writes are not
   reported.
+- `apply(_:)` takes in a change another screen has already made (the episode page's delete, wired by
+  `AppModel.makeEpisodeDetailModel`). It sends nothing and does not call `onChange`. `.deleted`
+  removes the recording and updates the counts (so the last one empties the show); `.watched` sets
+  the mark, unless this page's own watched write to that recording is in flight (the page's newest
+  wish wins). A recording the show does not have is ignored.
 
 **Episode detail rules** (`EpisodeDetailModel`)
 
@@ -1041,6 +1063,13 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   load keeps what an earlier load found.
 - Labels are "Resume from 12:34", "Play from Bookmark at 1:02:03" (whole seconds; hours only from
   one hour) and "Play from Beginning", built in `EpisodeLabels`.
+- **Delete** (owner, 2026-11-15). `delete()` sends `RecordingsService.delete(id:allowRerecord: false)`
+  and, unlike the show page, is not optimistic: the page closes when it succeeds, so a failure must
+  keep the page up to be seen. While it is in flight `isDeleting` is true and another `delete()`
+  joins it (nothing more is sent); after a success `isDeleted` is true, `onChange(.deleted(id))` is
+  called and later calls send nothing. A failure sets `problem` (which clears when the next delete or
+  load starts) and leaves `isDeleted` false. The caller cannot cancel it. Confirming
+  (`askBeforeDelete`) is the view's job; the view closes the page when `isDeleted` becomes true.
 
 **Address rules** (`SettingsViewModel` and `OnboardingViewModel`)
 
@@ -1048,8 +1077,12 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   whitespace) is *empty*; text that is not blank and does not parse is *invalid*; anything else is
   *valid*. Two texts that parse to the same `BackendConnection` are the same backend (`host` and
   `http://host:6544`). `addressHint` is the plain-English line "That doesn't look like an address.
-  Try something like 192.168.1.20 or mybackend.local." for invalid text, and nil for valid and
-  empty text; it is built in `SetupLabels`. `canTestConnection` is true only for valid text.
+  Try something like 192.168.1.20 or mybackend.local." for invalid text; for valid text whose host
+  is a bare name (one label, not an IP literal, not `localhost`) it is "Apple TV usually can't find
+  a backend by its name alone. Try *host*.local, or the backend's IP address." (tvOS does not
+  resolve bare names: settled on the owner's Apple TV in M2-7, through `URLSession` and VLC alike,
+  while `basement.local` worked); it is nil for other valid text and for empty text. It is built
+  in `SetupLabels`. `canTestConnection` is true only for valid text, bare names included.
 - **Test connection.** `testConnection()` does nothing unless the address is valid. Otherwise
   `connectionTest` goes `.loading`, then `.loaded(BackendInfo)` or `.failed(UserMessage)` (any
   error other than a `BackendError` gives `UserMessage.unexpected`; an unsupported version gives
@@ -1120,6 +1153,17 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   takes the user to the tabs, where the failure shows with Try Again and Settings.
 - Editing the address so it means another backend returns a failed `connectState` to `.idle`.
 
+**Artwork** (`ArtworkURLs`, from `AppModel.makeArtwork()`). Each call gives the URLs to try in
+order; the view shows the first that loads and a titled placeholder when none does.
+
+- A show's poster: the show's `poster` artwork, then the preview image of its newest recording.
+- A recording's poster: its own first `.poster` artwork, then its preview image.
+- A show page's fanart: the first `.fanart` of the newest recording that has one, else none.
+- A landscape recording card: the recording's preview image.
+- Widths requested are the caller's; the v35 locator rounds them up to 160/320/640/1280. Each new
+  width makes the backend write a scaled copy once (BACKEND-V35), so screens use 320 (posters),
+  640 (cards) and 1280 (episode page, fanart) only.
+
 ## 7. App target (`Mythwatch`)
 
 SwiftUI only; no logic beyond layout, focus and navigation. Follow Apple's tvOS Human Interface
@@ -1128,13 +1172,29 @@ stock control cannot do the job.
 
 | Screen | Notes |
 | --- | --- |
-| Root | No backend configured: Onboarding. Otherwise `TabView` with Recordings and Settings. Tabs come from `capabilities` (Live TV and Videos appear when an adapter offers them). |
+| Root | No backend saved (`AppModel.savedSettings.backend == nil` while `session` is `.idle`): Onboarding. Otherwise `TabView` with Recordings and Settings. Once shown, Onboarding and its model stay until `connectState` is `.loaded` (a failed connect has already saved the address, §6.4). Tabs come from `capabilities` (Live TV and Videos appear when an adapter offers them). Root calls `connect()` once at launch. |
 | Onboarding | Discovered backends list, manual address field, Connect. Shows the detected version, or the unsupported-version message. |
-| Recordings | Vertical scroll: Continue Watching shelf (landscape cards with progress), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry. |
-| Show | Fanart header, season picker, episode list (title, S/E, air date, duration, watched mark, progress). Context menu: Mark Watched/Unwatched, Delete. |
-| Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete. |
+| Recordings | Vertical scroll: Continue Watching shelf (landscape cards with a part-watched mark; a progress bar needs each recording's position, which the list does not carry), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry; a failed refresh is a banner over the content. Refreshes when the app becomes active. A new `BackendSession.id` gives a new library model and an empty navigation stack. |
+| Show | Fanart header, season picker (several seasons; one named season is a heading; a film's unnamed season draws nothing), episode list (title, S/E, air date, duration, watched or part-watched mark). Context menu: Mark Watched/Unwatched, Delete (confirmed when `askBeforeDelete`). Closes when `isEmpty`. |
+| Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete (confirmed when `askBeforeDelete`). Closes when `isDeleted`. Reached from the shelves and from the show page. |
 | Player | Full-screen video with our transport overlay. See below. |
-| Settings | Backend (address, detected version, adapter, Test Connection), Playback (skip steps, deinterlace), Commercials (mode), About (version, licences). |
+| Settings | Backend (address, detected version, adapter, Test Connection), discovered backends, Playback (skip steps, deinterlace, ask before deleting), Commercials (mode), About (version, licences from the bundled `THIRD_PARTY_NOTICES.md`). Saves on leaving the tab when `canSave` (owner, 2026-11-15); the address hint shows while the text is invalid. Discovery runs while the screen is shown (also on Onboarding). |
+
+Screen wording that is not a `UserMessage`, an `addressHint` or a `StartOption.title` lives in one
+app file, `Shared/Labels.swift`. A page that makes its model on appear must put a view on screen
+before the model exists (an empty view never appears, so the model would never be made).
+
+**UI tests** (owner, 2026-11-15: the real fakes). `MythwatchTestSupport` is linked into the app for
+**Debug builds only**: the app target lists the package product, and its Release configuration sets
+`EXCLUDED_SOURCE_FILE_NAMES = MythwatchTestSupport.o`, which drops it from the Release link. The
+composition root imports it inside `#if DEBUG` only. Launched with `-MythwatchFakes`, a Debug build
+runs on `DemoBackend` (§8): fakes over an invented library, a probe answered by `FixtureTransport`,
+image URLs on a closed local port; nothing reaches a network backend. `-MythwatchFakesBackendSaved`
+starts with the demo address saved (tabs), without it on Onboarding. Checked in M2-7: the Release
+product has no `MythwatchTestSupport` symbols (`nm`) and links no extra library (`otool -L`).
+The UI tests drive the remote (`XCUIRemote`) and find views by accessibility identifier.
+`testLiveWalkthroughTakesScreenshots` runs only with `TEST_RUNNER_MYTHWATCH_LIVE_UI=1` against the
+backend saved in the app's settings, and only moves focus, opens pages and goes back.
 
 **Player controls** (Siri Remote):
 
@@ -1189,6 +1249,7 @@ after cloning, before building the app.
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
+| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`; its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
 ### `FakePlayerEngine` rules

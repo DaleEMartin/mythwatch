@@ -46,6 +46,11 @@ enum EpisodeLabels {
 /// nothing to resume. It clears when the next load starts; a failed load keeps what an earlier
 /// load found.
 ///
+/// `delete()` sends `delete(id:allowRerecord: false)` and waits for the answer: the page closes
+/// when `isDeleted` becomes true, so a failure must keep the page up to be seen. While it is in
+/// flight `isDeleting` is true and another `delete()` sends nothing; a failure sets `problem`.
+/// A successful delete calls `onChange` with `.deleted`. Confirming is the view's job.
+///
 /// A concurrent `load()` joins the one running. If every caller waiting is cancelled the load is
 /// cancelled and publishes nothing: no message, `isLoading` back to false, the positions as they
 /// were before it started (none, after a first load).
@@ -55,8 +60,14 @@ enum EpisodeLabels {
     public private(set) var bookmark: Duration?
     public private(set) var isLoading = false
     public private(set) var problem: UserMessage?
+    public private(set) var isDeleting = false
+    /// The backend accepted the delete: the view should close the page.
+    public private(set) var isDeleted = false
 
     @ObservationIgnored private let state: any PlaybackStateService
+    @ObservationIgnored private let recordings: any RecordingsService
+    @ObservationIgnored private let onChange: (@MainActor (RecordingChange) -> Void)?
+    @ObservationIgnored private var deleteTask: Task<Void, Never>?
     @ObservationIgnored private let shared = SharedLoad<Positions>()
 
     struct Positions: Sendable {
@@ -64,9 +75,39 @@ enum EpisodeLabels {
         var bookmark: Result<Duration?, any Error>
     }
 
-    public init(recording: Recording, state: any PlaybackStateService) {
+    public init(
+        recording: Recording, state: any PlaybackStateService, recordings: any RecordingsService,
+        onChange: (@MainActor (RecordingChange) -> Void)? = nil
+    ) {
         self.recording = recording
         self.state = state
+        self.recordings = recordings
+        self.onChange = onChange
+    }
+
+    /// Deletes the recording (no rerecord). The returned task ends when the backend has
+    /// answered; the caller cannot cancel the delete.
+    @discardableResult
+    public func delete() -> Task<Void, Never> {
+        if let deleteTask { return deleteTask }
+        guard !isDeleted else { return Task {} }
+        problem = nil
+        isDeleting = true
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            let id = recording.id
+            do {
+                try await recordings.delete(id: id, allowRerecord: false)
+                isDeleted = true
+                onChange?(.deleted(id))
+            } catch {
+                problem = UserMessage.describing(error)
+            }
+            isDeleting = false
+            deleteTask = nil
+        }
+        deleteTask = task
+        return task
     }
 
     public var startOptions: [StartOption] {

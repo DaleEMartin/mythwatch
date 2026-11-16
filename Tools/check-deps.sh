@@ -44,5 +44,40 @@ for target in *; do
   done < <(grep -rnE '^[[:space:]]*(@[A-Za-z_]+(\([^)]*\))?[[:space:]]+|public[[:space:]]+|package[[:space:]]+|internal[[:space:]]+|fileprivate[[:space:]]+|private[[:space:]]+)*import[[:space:]]' --include='*.swift' "$target")
 done
 
+# The app target (SPEC §2 "App target" row). It may import MythwatchFeatures and the layers under
+# it. Only the composition root (App/Composition.swift) may import MythBackendV35, and
+# MythwatchTestSupport only there and only inside `#if DEBUG` (Release builds neither link nor
+# contain it; SPEC §7 "UI tests"). Only VLCPlayerEngine.swift may import VLCKit. The UI tests
+# import none of our modules.
+app_dir="../../Mythwatch/Mythwatch"
+composition="App/Composition.swift"
+while IFS= read -r file; do
+  rel=${file#"$app_dir/"}
+  in_debug=0
+  while IFS= read -r text; do
+    case "$text" in
+      "#if DEBUG") in_debug=1; continue ;;
+      "#endif"*|"#else"*) in_debug=0; continue ;;
+    esac
+    echo "$text" | grep -qE '^[[:space:]]*((@[A-Za-z_]+|public|internal|private|fileprivate|package)[[:space:]]+)*import[[:space:]]' || continue
+    module=$(echo "$text" | sed -E 's/.*import[[:space:]]+((struct|class|enum|protocol|typealias|func|let|var)[[:space:]]+)?([A-Za-z0-9_]+).*/\3/')
+    case "$module" in
+      MythwatchFeatures|MythwatchDomain|MythwatchBackend|MythwatchPlayback) ;;
+      MythBackendV35)
+        [ "$rel" = "$composition" ] || { echo "error: $rel: only $composition may import MythBackendV35 (SPEC §2)"; status=1; } ;;
+      MythwatchTestSupport)
+        if [ "$rel" != "$composition" ] || [ $in_debug -ne 1 ]; then
+          echo "error: $rel: MythwatchTestSupport may only be imported inside #if DEBUG in $composition (SPEC §2, §7)"; status=1
+        fi ;;
+      TVVLCKit|MobileVLCKit)
+        case "$rel" in */VLCPlayerEngine.swift|VLCPlayerEngine.swift) ;; *) echo "error: $rel: only VLCPlayerEngine.swift may import VLCKit (SPEC §7)"; status=1 ;; esac ;;
+    esac
+  done < "$file"
+done < <(find "$app_dir" -name '*.swift')
+
+if grep -rqE '^[[:space:]]*(@testable[[:space:]]+)?import[[:space:]]+Myth' ../../Mythwatch/MythwatchUITests; then
+  echo "error: the UI tests must not import Mythwatch modules; they drive the app (SPEC §7)"; status=1
+fi
+
 [ $status -eq 0 ] && echo "Dependency rule OK"
 exit $status

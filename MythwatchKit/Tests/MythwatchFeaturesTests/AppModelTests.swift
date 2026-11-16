@@ -346,3 +346,36 @@ struct AppModelTests {
         #expect(h.adapter === h.factory35.adapter)
     }
 }
+
+// MARK: - What the screens read (M2-7)
+
+@MainActor
+@Suite("AppModel saved settings and session identity")
+struct AppModelScreenStateTests {
+    @Test func savedSettingsReadsTheStoreEachTime() {
+        let h = Harness(backend: nil)
+        #expect(h.model.savedSettings.backend == nil)
+        h.use(alpha)
+        #expect(h.model.savedSettings.backend == alpha)
+        var s = h.settings.load()
+        s.askBeforeDelete = false
+        h.settings.save(s)
+        #expect(h.model.savedSettings.askBeforeDelete == false)
+    }
+
+    @Test func eachConnectThatSucceedsGivesASessionWithANewID() async throws {
+        let h = Harness()
+        await h.model.connect()
+        let first = try #require(h.session).id
+        await h.model.connect()
+        let second = try #require(h.session).id
+        #expect(first != second)
+    }
+
+    @Test func aSessionKeepsItsIDWhileItIsShown() async throws {
+        let h = Harness()
+        await h.model.connect()
+        let session = try #require(h.session)
+        #expect(h.model.session.value?.id == session.id)
+    }
+}

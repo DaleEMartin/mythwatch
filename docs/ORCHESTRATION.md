@@ -129,10 +129,23 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   work); check `URLSession` and guide the address field accordingly. For M5-4: audit the
   licences of the libraries bundled in VLCKit (libzvbi first). For the iPhone app: strip
   MobileVLCKit's armv7 slices before an App Store upload.
+- **M2-7 done and committed** (2026-11-15, direct Opus session with the owner): the six screens
+  (Root, Onboarding, Recordings, Show, Episode detail, Settings) in `Mythwatch/Mythwatch/`, five UI
+  tests on the fakes, screenshots against the fakes and against basement (GET only; no write was
+  sent). Model additions, all tested first: `EpisodeDetailModel.delete()` (not optimistic; closes
+  the page on success), `ShowViewModel.apply(_:)`, `ArtworkURLs` / `AppModel.makeArtwork()`,
+  `AppModel.savedSettings`, `BackendSession.id`, and a bare-host-name `addressHint`.
+  `MythwatchTestSupport` is linked into Debug only (`EXCLUDED_SOURCE_FILE_NAMES` on Release;
+  `nm` shows 0 of its symbols in Release); `DemoBackend` drives `-MythwatchFakes`;
+  `check-deps.sh` now checks the app target too. **Settled:** tvOS does not resolve the bare
+  name `basement` through `URLSession` either; `basement.local` works. For M3-4: the start
+  buttons on the episode page do nothing yet; wire them to the player and call
+  `reloadAfterPlayback()` on close. For later: Continue Watching shows a part-watched mark, not
+  a progress bar (the list has no positions); the context menu on episode rows was not driven by
+  a UI test.
 - **Every task that can run without the owner is done.** Remaining, all needing the owner:
-  **M2-7** (library and settings UI), then M3-3 (real Apple TV), M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
+  M3-3 (real Apple TV), M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
   session; do not launch them unattended.
-  **M2-7 (UI) needs the owner**; offer a direct Opus session, do not launch it.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that
   apply now: the package declares iOS 26 and must stay platform-neutral, view models must not

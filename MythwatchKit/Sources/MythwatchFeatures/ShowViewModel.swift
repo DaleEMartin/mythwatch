@@ -138,6 +138,24 @@ import Observation
         }
     }
 
+    // MARK: Changes made elsewhere
+
+    /// Takes in a change another screen has already made on the backend (the episode page's
+    /// delete). Sends nothing and does not call `onChange`. A recording the show does not have
+    /// is ignored, and so is a watched change while this page's own watched write to that
+    /// recording is in flight (the page's newest wish wins).
+    public func apply(_ change: RecordingChange) {
+        switch change {
+        case .deleted(let id):
+            removed[id] = nil
+            guard show.recordings.contains(where: { $0.id == id }) else { return }
+            replaceRecordings(show.recordings.filter { $0.id != id })
+        case .watched(let id, let watched):
+            guard watchedWrites[id] == nil else { return }
+            setLocalWatched(watched, id: id)
+        }
+    }
+
     // MARK: Delete
 
     @discardableResult

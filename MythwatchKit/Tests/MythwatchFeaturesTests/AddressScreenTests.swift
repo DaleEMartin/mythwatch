@@ -242,6 +242,29 @@ struct AddressScreenEditingTests {
         #expect(rig.transport.requests.isEmpty)
     }
 
+    /// M2-7, settled on the owner's Apple TV: tvOS does not resolve a bare host name such as
+    /// `basement` (neither `URLSession` nor VLC), while `basement.local` works. A bare name is
+    /// still a valid address (some networks resolve it) but gets a hint.
+    @Test(arguments: ScreenKind.allCases, [
+        ("basement", "basement"), ("basement:6544", "basement"), ("HTTP://MythBox:80", "mythbox"),
+        ("https://my_box-2", "my_box-2"), ("  basement  ", "basement"),
+    ])
+    func aBareNameCanBeTestedButSuggestsADotLocalNameOrAnIPAddress(_ kind: ScreenKind, _ example: (String, String)) {
+        let (text, host) = example
+        let screen = kind.make(SetupRig())
+        screen.addressText = text
+        #expect(screen.canTestConnection)
+        #expect(screen.addressHint
+            == "Apple TV usually can't find a backend by its name alone. Try \(host).local, or the backend's IP address.")
+    }
+
+    @Test(arguments: ScreenKind.allCases, ["localhost", "localhost:6544"])
+    func localhostGetsNoBareNameHint(_ kind: ScreenKind, _ text: String) {
+        let screen = kind.make(SetupRig())
+        screen.addressText = text
+        #expect(screen.addressHint == nil)
+    }
+
     @Test(arguments: ScreenKind.allCases, ["", "   ", "\n"])
     func anEmptyAddressCannotBeTestedButIsNotAnError(_ kind: ScreenKind, _ text: String) async {
         let rig = SetupRig()

@@ -14,7 +14,8 @@ struct EpisodeDetailModelTests {
 
     init() {
         adapter = FakeBackendAdapter(recordings: [episode(1)])
-        model = EpisodeDetailModel(recording: episode(1), state: adapter.playbackState)
+        model = EpisodeDetailModel(
+            recording: episode(1), state: adapter.playbackState, recordings: adapter.recordings)
     }
 
     var fake: FakePlaybackStateService { adapter.playbackStateFake }
@@ -60,7 +61,8 @@ struct EpisodeDetailModelTests {
 
     @Test func aPositionOfZeroOrLessIsTreatedAsNone() async {
         let model = EpisodeDetailModel(
-            recording: recording, state: StubPlaybackState(resume: .zero, mark: .seconds(-5)))
+            recording: recording, state: StubPlaybackState(resume: .zero, mark: .seconds(-5)),
+            recordings: adapter.recordings)
         await model.load()
         #expect(model.resumePosition == nil)
         #expect(model.bookmark == nil)
@@ -69,7 +71,8 @@ struct EpisodeDetailModelTests {
 
     @Test func aTinyPositionIsStillOffered() async {
         let model = EpisodeDetailModel(
-            recording: recording, state: StubPlaybackState(resume: .milliseconds(1500), mark: nil))
+            recording: recording, state: StubPlaybackState(resume: .milliseconds(1500), mark: nil),
+            recordings: adapter.recordings)
         await model.load()
         #expect(model.startOptions.first?.title == "Resume from 0:01")
     }
@@ -122,7 +125,7 @@ struct EpisodeDetailModelTests {
             func bookmark(for id: RecordingID) async throws -> Duration? { nil }
             func setBookmark(_ position: Duration?, for id: RecordingID) async throws {}
         }
-        let model = EpisodeDetailModel(recording: recording, state: Broken())
+        let model = EpisodeDetailModel(recording: recording, state: Broken(), recordings: adapter.recordings)
         await model.load()
         #expect(model.problem == .unexpected)
     }
@@ -164,7 +167,7 @@ struct EpisodeDetailModelTests {
     func aCancelledLoadShowsNoErrorAndIsNotStuckLoading(urlSessionStyle: Bool) async throws {
         adapter.store.add(recording, resumePosition: .seconds(60), bookmark: nil)
         let state: any PlaybackStateService = urlSessionStyle ? UnreachableOnCancelState(inner: fake) : fake
-        let model = EpisodeDetailModel(recording: recording, state: state)
+        let model = EpisodeDetailModel(recording: recording, state: state, recordings: adapter.recordings)
         fake.suspend()
         let task = Task { await model.load() }
         try await fake.waitForParked(2)

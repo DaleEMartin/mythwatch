@@ -54,7 +54,7 @@ import Observation
 
     /// A hint to show under the address field when the text is not an address. Nil for a valid
     /// address and for an empty one.
-    public var addressHint: String? { input.isInvalid ? SetupLabels.invalidAddress : nil }
+    public var addressHint: String? { input.hint }
 
     /// Whether Test Connection can be offered: the address is valid.
     public var canTestConnection: Bool { input.connection != nil }

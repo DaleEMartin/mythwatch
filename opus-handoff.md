@@ -47,8 +47,8 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 
 | Task | What | Needs |
 | --- | --- | --- |
-| **M0-3** | VLCKit playback spike. Go/no-go for the playback approach. | A real Apple TV; basement (GET only) |
-| **M2-7** | Library and settings UI | Simulator; independent of M0-3 |
+| ~~M0-3~~ | Done 2026-11-15: go. See `docs/VLCKIT.md`. | |
+| ~~M2-7~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
 | **M3-3** | `VLCPlayerEngine` | M0-3 done; real Apple TV |
 | **M3-4** | Player screen | M3-3 |
 | **M3-5** | Write path in the v35 adapter | **A recording the owner nominates** |
@@ -152,15 +152,22 @@ per model. Things the models already decided that the views must respect:
 - **Toggling watched or deleting against basement fails today.** The write stubs throw, the
   model rolls back, and the user sees "Your MythTV Backend Turned That Down". That is expected
   until M3-5 and sends nothing to the backend.
-- **Open, yours to settle with the owner:** SPEC §7 puts a Delete button on the episode detail
-  page, but `EpisodeDetailModel` has no delete. Either add it to the model (with tests and a
-  SPEC §6.4 line) or leave Delete to the show page and correct SPEC §7.
+- **Delete on the episode detail page: wanted** (owner, 2026-11-15). `EpisodeDetailModel` has no
+  delete yet: add it, test first, with a SPEC §6.4 line. Confirmation stays the view's job.
+  After a delete, close the page.
 - Start and stop discovery from the view's appear and disappear (`startDiscovery()` /
   `stopDiscovery()` on the settings and onboarding models).
-- The task wants UI tests that run against fakes through a launch argument. The fakes are in
-  `MythwatchTestSupport`, which the app target does not link today; decide with the owner how
-  the app gets them (link test support into debug builds only, or a small in-app stub) and
-  record the choice in SPEC §7.
+- **UI tests use the real fakes** (owner, 2026-11-15). Link `MythwatchTestSupport` into the app
+  for **debug builds only**; a launch argument switches the composition root to the fakes.
+  Release builds must neither link nor contain it: check the Release product with `otool -L`
+  / `nm`. Record the arrangement in SPEC §7, and update the app row of the SPEC §2 dependency
+  table and `Tools/check-deps.sh` to match.
+- **Backend address on tvOS** (owner agreed, 2026-11-15). In M0-3 the Apple TV could not resolve
+  the bare name `basement` through VLC; `basement.local` and the IP address worked
+  (`docs/VLCKIT.md` §8). First check whether `URLSession` on the Apple TV (or the simulator)
+  resolves a bare name. If it does not, the address field's hint and the onboarding text
+  should steer the user to a `.local` name or an IP address. Wording goes through the
+  existing `addressHint` / `UserMessage` rules.
 
 ### M3-3 `VLCPlayerEngine` and M3-4 player screen
 

@@ -191,9 +191,10 @@ No network-caching option was needed; VLC's default (1000 ms) gave no rebufferin
 - **The Apple TV cannot resolve the bare name `basement`.** Playback through
   `http://basement:6544` failed at once (`Opening`, `Error`), while `http://basement.local:6544`
   (Bonjour) and `http://192.168.1.50:6544` played. The Mac resolves the bare name; the Apple TV
-  does not. Seen through VLC's resolver only. `[verify]` in M2-7: does `URLSession` on the Apple
-  TV resolve it? If not, onboarding should suggest the `.local` name or the IP address, and M5-2
-  discovery should store the resolved `.local` host. An address saved as `basement` will fail.
+  does not. **Settled in M2-7:** `URLSession` on the Apple TV fails the same way (Test Connection
+  to `basement` gave "Can't Reach Your MythTV Backend"; `basement.local` found v35.0). The
+  address hint now suggests `<name>.local` or the IP address for a bare name (SPEC 6.4 "Address
+  rules"); M5-2 discovery should store the resolved `.local` host.
 - **No Local Network permission prompt appeared** on tvOS 26.6.1 for plain HTTP to the backend.
 - **Track ids** are VLC's stream indexes: audio 1, 2 and captions 3 to 6 on these recordings,
   with -1 meaning "Disable". `VLCPlayerEngine` should drop the "Disable" entry from the lists and

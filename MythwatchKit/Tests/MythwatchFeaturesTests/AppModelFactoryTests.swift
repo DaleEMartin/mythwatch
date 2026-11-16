@@ -111,6 +111,41 @@ struct AppModelFactoryTests {
         #expect(h.adapter.recordingsFake.calls == [.setWatched(true, rid(1))])
     }
 
+    @Test func aDeleteOnTheEpisodePageReachesTheLibraryAndTheShowPage() async throws {
+        let h = await Harness.connected(recordings)
+        let library = h.model.makeLibraryModel()
+        await library.load()
+        let show = try #require(library.library.value?.shows.first { $0.title == "Garden Tales" })
+        let showModel = h.model.makeShowModel(show)
+        let detail = h.model.makeEpisodeDetailModel(recordings[0])
+        await detail.delete().value
+        #expect(h.adapter.recordingsFake.calls.last == .delete(rid(1), allowRerecord: false))
+        #expect(detail.isDeleted)
+        #expect(showModel.show.recordings.map(\.id) == [rid(2)])
+        #expect(library.library.value?.shows.first { $0.title == "Garden Tales" }?.episodeCount == 1)
+        #expect(h.adapter.recordingsFake.calls.filter { $0 == .allRecordings }.count == 1)
+    }
+
+    @Test func aShowModelThatIsGoneIsNotKeptAliveByTheAppModel() async throws {
+        let h = await Harness.connected(recordings)
+        weak var weakShow: ShowViewModel?
+        do {
+            let model = h.model.makeShowModel(LibraryBuilder.build(from: recordings).shows[0])
+            weakShow = model
+        }
+        #expect(weakShow == nil)
+        // An episode page opened from a shelf, with no show page alive, still deletes.
+        let detail = h.model.makeEpisodeDetailModel(recordings[2])
+        await detail.delete().value
+        #expect(detail.isDeleted)
+    }
+
+    @Test func artworkFromTheFactoryUsesTheSessionsMediaLocator() async {
+        let h = await Harness.connected(recordings)
+        let urls = h.model.makeArtwork().thumbnail(for: recordings[0], maxWidth: 320)
+        #expect(urls == [h.adapter.mediaFake.previewImageURL(for: recordings[0], maxWidth: 320)])
+    }
+
     @Test func aLibraryModelThatIsGoneIsNotKeptAliveByTheAppModel() async throws {
         let h = await Harness.connected(recordings)
         weak var weakLibrary: LibraryViewModel?

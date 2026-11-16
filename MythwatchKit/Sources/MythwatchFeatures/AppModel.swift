@@ -5,8 +5,10 @@ import MythwatchPlayback
 import Observation
 
 /// A connected backend: what the probe found, the adapter made for it, and the name of the
-/// adapter's factory ("MythTV v35").
-public struct BackendSession: Sendable {
+/// adapter's factory ("MythTV v35"). `id` is new for every session made, so a screen can tell a
+/// fresh connection from the one it already shows.
+public struct BackendSession: Sendable, Identifiable {
+    public let id = UUID()
     public let info: BackendInfo
     public let adapter: any BackendAdapter
     public let adapterName: String
@@ -54,6 +56,9 @@ public struct BackendSession: Sendable {
     /// The newest library model made by `makeLibraryModel()`, held weakly: show models report
     /// their writes to it so the library is right when the user goes back.
     @ObservationIgnored private weak var libraryModel: LibraryViewModel?
+    /// The newest show model made by `makeShowModel(_:)`, held weakly: an episode page's delete
+    /// is applied to it so the show page underneath is right when the user goes back.
+    @ObservationIgnored private weak var showModel: ShowViewModel?
 
     @ObservationIgnored private var attempt: Attempt?
     @ObservationIgnored private var lastAttemptID = 0
@@ -108,6 +113,10 @@ public struct BackendSession: Sendable {
         await task.value
     }
 
+    /// The settings as stored now, read from the store on each access (not observed). Root
+    /// decides Onboarding from `backend` (SPEC 7); pages read `askBeforeDelete`.
+    public var savedSettings: AppSettings { settings.load() }
+
     // MARK: View-model factories
 
     /// The adapter of the loaded session. The screens only exist once a session is loaded, so
@@ -130,14 +139,28 @@ public struct BackendSession: Sendable {
     /// A show page's model. Needs a loaded session. Its successful writes are applied to the
     /// newest library model made by `makeLibraryModel()`, if that is still alive.
     public func makeShowModel(_ show: Show) -> ShowViewModel {
-        ShowViewModel(
+        let model = ShowViewModel(
             show: show, recordings: sessionAdapter.recordings,
             onChange: { [weak libraryModel] change in libraryModel?.apply(change) })
+        showModel = model
+        return model
     }
 
-    /// An episode detail page's model. Needs a loaded session.
+    /// An episode detail page's model. Needs a loaded session. Its successful delete is applied
+    /// to the newest library model and the newest show model, if they are still alive.
     public func makeEpisodeDetailModel(_ recording: Recording) -> EpisodeDetailModel {
-        EpisodeDetailModel(recording: recording, state: sessionAdapter.playbackState)
+        let adapter = sessionAdapter
+        return EpisodeDetailModel(
+            recording: recording, state: adapter.playbackState, recordings: adapter.recordings,
+            onChange: { [weak libraryModel, weak showModel] change in
+                libraryModel?.apply(change)
+                showModel?.apply(change)
+            })
+    }
+
+    /// The image URLs the screens try, from the session's media locator. Needs a loaded session.
+    public func makeArtwork() -> ArtworkURLs {
+        ArtworkURLs(media: sessionAdapter.media)
     }
 
     /// A viewing of `recording` from `start`. Needs a loaded session. Uses the session's adapter,
