@@ -52,6 +52,9 @@ import Observation
     @ObservationIgnored private var lastInput: ContinuousClock.Instant
     /// When the session was last seen to start playing; nil while it is not playing.
     @ObservationIgnored private var playingSince: ContinuousClock.Instant?
+    /// The `undoUntil` of a skipped banner this model's clock has passed. Observed, so the
+    /// screen redraws when `tick()` hides the banner.
+    private var expiredUndoUntil: ContinuousClock.Instant?
 
     public init(
         session: PlaybackSession, recording: Recording,
@@ -77,6 +80,44 @@ import Observation
     }
     /// The session's newest non-fatal problem, already plain words.
     public var notice: String? { session.problem }
+
+    // MARK: Commercials (M4-3)
+
+    /// What the commercial banner shows. The words are the screen's (`Labels`).
+    public enum CommercialBanner: Sendable, Equatable {
+        /// Commercials were skipped by this distance; Select goes back.
+        case skipped(Duration)
+        /// Prompt mode: playback is in a break; Select skips it.
+        case offer
+    }
+
+    /// The banner to show, or nil. A skipped banner goes when this model's clock reaches its
+    /// `undoUntil`, even if the session still holds it (no ticks reach the session while paused).
+    public var commercialBanner: CommercialBanner? {
+        switch session.banner {
+        case .skipped(let distance, let undoUntil):
+            return undoUntil == expiredUndoUntil || now() >= undoUntil ? nil : .skipped(distance)
+        case .offer: return .offer
+        case nil: return nil
+        }
+    }
+
+    /// When the skipped banner will go; nil when none is showing. The screen calls `tick()` then.
+    public var bannerHidesAt: ContinuousClock.Instant? {
+        guard case .skipped(_, let undoUntil) = session.banner, commercialBanner != nil else { return nil }
+        return undoUntil
+    }
+
+    /// The breaks as shares of the duration (0...1) for the scrubber, in every mode; cut at the
+    /// duration, and empty without one.
+    public var breakSegments: [ClosedRange<Double>] {
+        guard let duration else { return [] }
+        let total = Self.seconds(duration)
+        return session.breaks.compactMap { b in
+            guard b.start < duration else { return nil }
+            return (Self.seconds(b.start) / total)...(Self.seconds(min(b.end, duration)) / total)
+        }
+    }
 
     /// The scrub preview while scrubbing, else where the video is.
     public var position: Duration { scrubPosition ?? session.snapshot.position }
@@ -108,6 +149,9 @@ import Observation
     /// Notes whether the session is playing, and hides the controls once `hideAt` has passed.
     /// Call it when the session's snapshot changes and when `hideAt` arrives.
     public func tick() {
+        if case .skipped(_, let undoUntil) = session.banner, now() >= undoUntil, expiredUndoUntil != undoUntil {
+            expiredUndoUntil = undoUntil
+        }
         if isPlaying {
             if playingSince == nil { playingSince = now() }
             if let hideAt, now() >= hideAt { controlsVisible = false }
@@ -135,13 +179,30 @@ import Observation
 
     // MARK: Intents
 
-    /// Click: commits a scrub, else plays or pauses.
+    /// Click: commits a scrub, else acts on the commercial banner (Go back, or Skip), else plays
+    /// or pauses.
     public func select() {
         if scrubPosition != nil {
             commitScrub()
-        } else {
-            playPause()
+            return
         }
+        switch commercialBanner {
+        case .skipped: goBack()
+        case .offer: skipCommercials()
+        case nil: playPause()
+        }
+    }
+
+    /// Undoes the last commercial skip. After the banner has gone it only clears the session's.
+    public func goBack() {
+        session.undoCommercialSkip()
+        showControls()
+    }
+
+    /// Prompt mode: skips the break on offer.
+    public func skipCommercials() {
+        session.acceptSkipOffer()
+        showControls()
     }
 
     /// Play/Pause: commits a scrub first, then plays or pauses.

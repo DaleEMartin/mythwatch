@@ -1141,10 +1141,12 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
     // state: controlsVisible, hideAt, panel, scrubPosition, audioTracks, subtitleTracks,
     //        selectedAudioTrack, selectedSubtitleTrack; derived: isPlaying, isWaiting, hasEnded,
     //        failure: UserMessage?, notice: String?, position, duration, progress, elapsedText, remainingText
+    // M4-3: public enum CommercialBanner { case skipped(Duration), offer }
+    //       derived: commercialBanner: CommercialBanner?, bannerHidesAt, breakSegments: [ClosedRange<Double>]
     // intents: tick(), showControls(), select(), playPause(), play(), pause(), skipForward(),
     //          skipBackward(), skip(by:), seek(to:), scrub(by:), commitScrub(), cancelScrub(),
     //          back() -> BackResult, openPanel(_:), closePanel(), selectAudioTrack(_:),
-    //          selectSubtitleTrack(_:), setBookmark() async
+    //          selectSubtitleTrack(_:), setBookmark() async, goBack(), skipCommercials()
     public static func timeText(_ d: Duration) -> String
 }
 ```
@@ -1174,6 +1176,19 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
 - **Panel.** `openPanel(_:)` (default `.info`) and each track selection read the tracks from the
   session. `setBookmark()` is the session's `setBookmarkHere()` (owner, 2026-11-15: a button in the
   Info tab); a failure shows in `notice`.
+- **Commercials** (M4-3). `commercialBanner` follows the session's `banner`: `.skipped(distance)`
+  for `.skipped(distance, undoUntil:)`, `.offer` for `.offer(_)`. A skipped banner is hidden once
+  this model's clock reaches its `undoUntil`, even while the session still holds it (no ticks
+  reach the session while paused, §5.2 "Banner expiry"); `tick()` records the expiry so the screen
+  redraws, and `bannerHidesAt` is that `undoUntil` while the skipped banner shows (nil otherwise),
+  so the screen calls `tick()` then, as it does for `hideAt`. An offer never expires on its own.
+  `select()` commits a scrub first; otherwise, while a banner shows, it acts on it (`.skipped`:
+  `goBack()`; `.offer`: `skipCommercials()`) instead of toggling play/pause. `playPause()` always
+  toggles. `goBack()` is the session's `undoCommercialSkip()` (after the window it only clears the
+  session's banner) and `skipCommercials()` its `acceptSkipOffer()`; both count as input.
+  `breakSegments` are the session's `breaks` as shares of `duration`, in every mode, each cut at
+  the duration and dropped if it starts at or after it; empty without a duration. Wording is the
+  screen's (`Labels`): "Skipped commercials · 2:56" beside a Go Back button, and Skip Commercials.
 
 **Address rules** (`SettingsViewModel` and `OnboardingViewModel`)
 
@@ -1309,8 +1324,13 @@ backend saved in the app's settings, and only moves focus, opens pages and goes 
 | Swipe on the touch surface while paused | Scrub; click to commit, Menu to cancel |
 | Swipe down | Panel with Info, Audio, Subtitles tabs |
 | Menu / Back | Close panel, else leave the player (calls `finish()`) |
-| Select while the "Skipped commercials" banner is focused | Undo |
+| Select while the "Skipped commercials" banner shows | Undo (Go Back) |
 | Select while the Skip button is shown (prompt mode) | Skip |
+
+The banner and the Skip button (M4-3) are drawn as focused buttons at the bottom right, above the
+transport bar when it shows. They are not focusable: the remote's input view keeps focus, and
+Select reaches them through `TransportModel.select()`. Play/Pause still pauses while they show.
+Commercial breaks are yellow segments on the scrubber.
 
 **Player screen** (M3-4, `Player/PlayerScreen.swift`). It makes its session on appear and starts it.
 However it closes (Menu, the end of the recording, Close on the failure), it hands the session to
@@ -1325,7 +1345,11 @@ Audio / Subtitles picker; Menu closes it). `Player/NowPlaying.swift` publishes t
 duration, elapsed time and rate to `MPNowPlayingInfoCenter` (again on a status change or a jump
 of 2 s or more) and maps `MPRemoteCommandCenter`'s play, pause, toggle, skip (by the command's
 own interval) and change-position commands to the model. Checked on the owner's Apple TV against
-basement (2026-11-15): one Play/Pause press acts once.
+basement (2026-11-15): one Play/Pause press acts once. The screen calls `TransportModel.tick()` and
+`NowPlaying.update()` from an `Observations` loop over the session's snapshot (M4-3), not from
+`onChange`: SwiftUI drops `onChange` actions when the value changes several times in one frame, which
+missed a `.playing` and left the controls up. A second `.task(id: bannerHidesAt)` wakes the model when
+the skipped banner's undo window ends.
 
 The transport bar shows elapsed and remaining time, a scrubber with commercial breaks drawn as
 marked segments, and the title. It hides after 5 s of no input. Publish Now Playing info and
@@ -1378,7 +1402,7 @@ after cloning, before building the app.
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
-| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`; its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
+| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`. Its engine is a `FakePlayerEngine` that also reports each recording's length (from the stream URL), and the film "The Long Voyage" has three commercial breaks, one around its resume point, so resuming it skips a break at once (M4-3 UI test). Its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
 ### `FakePlayerEngine` rules

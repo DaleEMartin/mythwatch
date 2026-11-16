@@ -117,6 +117,39 @@ final class MythwatchUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["player.screen"].exists)
     }
 
+    /// M4-3: the demo film resumes at 1:02:03 inside a break (1:00:00 to 1:03:00), so the skip
+    /// happens at once and the banner shows; Select goes back to 2 s before where it was.
+    @MainActor
+    func testResumingIntoABreakSkipsItAndGoBackReturns() {
+        launch(backendSaved: true)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        press(.down, untilFocusedPrefix: "card.continueWatching.")
+        // Focus enters the shelf below wherever it was: start from the left end.
+        for _ in 0..<3 { remote.press(.left) }
+        press(.right, untilFocusedPrefix: "card.continueWatching.113", limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.left, until: app.buttons["detail.start.resume"], limit: 4)
+        remote.press(.select)
+
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        let goBack = app.descendants(matching: .any)["player.banner.goBack"]
+        XCTAssertTrue(goBack.waitForExistence(timeout: 5), "the skipped banner shows")
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "1:02:59")
+        XCTAssertEqual(app.staticTexts["player.banner.skippedText"].label, "Skipped commercials \u{00B7} 0:56")
+        attachScreenshot("8-player-skipped")
+
+        remote.press(.select)
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: goBack)
+        wait(for: [gone], timeout: 3)
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "1:02:01")
+        attachScreenshot("9-player-went-back")
+
+        remote.press(.menu)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+    }
+
     @MainActor
     func testSettingsShowsTheConnectedBackend() {
         launch(backendSaved: true)

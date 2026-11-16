@@ -181,6 +181,19 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   both clear forms worked on 3749. Left as found (unwatched, no position, no bookmark).
   `FakeBackendStore` already matched (zero clears). Capabilities unchanged. For M5-1: reuse
   `postExpectingTrue`; the player's "Couldn't save your place." should no longer appear.
+- **M4-3 done and committed** (2026-11-16, direct Opus session with the owner): commercial UI.
+  `TransportModel` gained `commercialBanner` (`.skipped(distance)` / `.offer`), `bannerHidesAt`,
+  `breakSegments`, `goBack()` and `skipCommercials()`; `select()` acts on a showing banner instead of
+  toggling (Play/Pause still pauses); the model hides the skipped banner by its own clock at
+  `undoUntil` even while paused (SPEC 6.4 "Commercials"). Screen: banner bottom right drawn as a
+  focused button ("Skipped commercials · 0:56" + Go Back; Skip Commercials in prompt mode), yellow
+  break segments on the scrubber. The Settings mode picker already existed (M2-7). `DemoBackend`'s
+  engine now reports each recording's length and the film has three breaks, one around its resume
+  point; new UI test `testResumingIntoABreakSkipsItAndGoBackReturns`. **Fixed an M3-4 bug** found on
+  the way: the player called `tick()` from `onChange(of: snapshot)`, which SwiftUI drops when several
+  snapshots land in one frame, so a missed `.playing` left the controls up for good; it now uses an
+  `Observations` loop. Not checked on the Apple TV: the banner with real breaks on basement, and
+  prompt mode on screen (prompt mode is covered by model tests only).
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its

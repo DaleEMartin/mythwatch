@@ -36,4 +36,19 @@ struct DemoBackendTests {
         #expect(app.session.value != nil)
         onboarding.stopDiscovery()
     }
+
+    /// M4-3: the film resumes inside a commercial break, so the UI test can see a skip and undo
+    /// it, and the demo engine knows each recording's length, so the scrubber can draw breaks.
+    @Test func theFilmResumesInsideABreakAndTheEngineKnowsItsLength() async throws {
+        let app = DemoBackend.appModel(backendSaved: true)
+        await app.connect()
+        let (film, resume) = try #require(DemoBackend.library().first { $0.0.title == "The Long Voyage" })
+        let resumeAt = try #require(resume)
+        let session = app.makePlaybackSession(film, start: .resume)
+        await session.start()
+        #expect(session.breaks.contains { $0.start <= resumeAt && resumeAt < $0.end })
+        #expect(session.breaks.count > 1)
+        #expect(session.engine.snapshot.duration == .seconds(7200))
+        _ = await session.finish()
+    }
 }

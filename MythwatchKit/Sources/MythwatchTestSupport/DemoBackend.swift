@@ -2,6 +2,7 @@ import Foundation
 import MythwatchBackend
 import MythwatchDomain
 import MythwatchFeatures
+import MythwatchPlayback
 
 /// A whole `AppModel` over the fakes, with a small invented library, for the app's UI tests and
 /// for screenshots (SPEC 7 "UI tests"). The app builds it only in debug builds, when launched
@@ -19,7 +20,12 @@ public enum DemoBackend {
     /// (the app opens on the tabs); without it the app opens on Onboarding.
     public static func appModel(backendSaved: Bool) -> AppModel {
         let adapter = FakeBackendAdapter(baseURL: URL(string: "http://127.0.0.1:9")!)
-        for (recording, resume) in library() { adapter.store.add(recording, resumePosition: resume) }
+        var lengths: [String: Duration] = [:]
+        for (recording, resume) in library() {
+            adapter.store.add(recording, resumePosition: resume, commercialBreaks: commercialBreaks(for: recording))
+            let seconds = recording.recordingEnd.timeIntervalSince(recording.recordingStart)
+            lengths[String(recording.id.rawValue)] = .seconds(Int(seconds))
+        }
 
         let transport = FixtureTransport()
         // BackendProbe's two version-neutral requests (SPEC 4); the fake adapter takes any version.
@@ -33,9 +39,18 @@ public enum DemoBackend {
         return AppModel(
             settings: InMemorySettingsStore(AppSettings(backend: backendSaved ? connection : nil)),
             connector: BackendConnector(registry: registry, transport: transport),
-            makeEngine: { FakePlayerEngine() },
+            makeEngine: { DemoPlayerEngine(lengths: lengths) },
             discovery: discovery,
             now: { ContinuousClock.now })
+    }
+
+    /// The film (M4-3): three breaks, the middle one around its resume point (1:02:03), so
+    /// resuming it skips a break at once and shows the banner. Nothing else has breaks.
+    static func commercialBreaks(for recording: Recording) -> [CommercialBreak] {
+        guard recording.title == "The Long Voyage" else { return [] }
+        return [(1_500, 1_680), (3_600, 3_780), (5_400, 5_580)].compactMap {
+            CommercialBreak(start: .seconds($0.0), end: .seconds($0.1))
+        }
     }
 
     /// Invented shows: a few series over two seasons, a film, a show with no season numbers.
@@ -89,5 +104,38 @@ public enum DemoBackend {
             add(title, key: "DEMO-\(n)", season: 1, episode: 1, subtitle: "Pilot", daysAgo: Double(30 + n))
         }
         return out
+    }
+}
+
+/// `FakePlayerEngine` that also knows each demo recording's length, so the player shows the
+/// remaining time and the breaks on the scrubber. The length comes from the stream URL's last
+/// component, the recording id (`FakeMediaLocator`).
+@MainActor final class DemoPlayerEngine: PlayerEngine {
+    private let inner = FakePlayerEngine()
+    private let lengths: [String: Duration]
+
+    init(lengths: [String: Duration]) { self.lengths = lengths }
+
+    var snapshot: PlayerSnapshot { inner.snapshot }
+    var snapshots: AsyncStream<PlayerSnapshot> { inner.snapshots }
+
+    func load(url: URL, startAt: Duration?) {
+        if let length = lengths[url.lastPathComponent] { inner.setDuration(length) }
+        inner.load(url: url, startAt: startAt)
+    }
+
+    func play() { inner.play() }
+    func pause() { inner.pause() }
+    func seek(to position: Duration) { inner.seek(to: position) }
+    func stop() { inner.stop() }
+    var audioTracks: [MediaTrack] { inner.audioTracks }
+    var subtitleTracks: [MediaTrack] { inner.subtitleTracks }
+    var selectedAudioTrack: MediaTrack.ID? {
+        get { inner.selectedAudioTrack }
+        set { inner.selectedAudioTrack = newValue }
+    }
+    var selectedSubtitleTrack: MediaTrack.ID? {
+        get { inner.selectedSubtitleTrack }
+        set { inner.selectedSubtitleTrack = newValue }
     }
 }

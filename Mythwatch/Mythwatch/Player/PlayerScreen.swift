@@ -1,6 +1,7 @@
 import MythwatchDomain
 import MythwatchFeatures
 import MythwatchPlayback
+import Observation
 import SwiftUI
 
 /// SPEC 7 "Player": full-screen video with our transport overlay. Makes its session when it
@@ -80,6 +81,13 @@ private struct PlayerContent: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     Spacer()
+                    if let banner = transport.commercialBanner {
+                        CommercialBannerView(banner: banner)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, 80)
+                            .padding(.bottom, transport.controlsVisible ? 0 : 60)
+                            .transition(.opacity)
+                    }
                     if transport.controlsVisible {
                         TransportBar(transport: transport)
                             .transition(.opacity)
@@ -87,16 +95,29 @@ private struct PlayerContent: View {
                 }
                 .animation(.easeInOut(duration: 0.25), value: transport.controlsVisible)
                 .animation(.easeInOut(duration: 0.25), value: transport.panel)
+                .animation(.easeInOut(duration: 0.25), value: transport.commercialBanner)
             }
         }
-        .onChange(of: transport.session.snapshot) {
-            transport.tick()
-            nowPlaying.update()
+        // Every snapshot change, from the one on screen at appear: `Observations` gives the latest
+        // value once per transaction. `onChange` is not used: it drops changes when several land in
+        // one frame (SwiftUI: "tried to update multiple times per frame"), and a missed `.playing`
+        // left the controls up for good.
+        .task {
+            for await _ in Observations({ transport.session.snapshot }) {
+                transport.tick()
+                nowPlaying.update()
+            }
         }
         .onChange(of: transport.hasEnded) { _, ended in if ended { leave() } }
         // The model has no timer: wake it when the controls are due to hide.
         .task(id: transport.hideAt) {
             guard let at = transport.hideAt else { return }
+            try? await Task.sleep(until: at, clock: .continuous)
+            if !Task.isCancelled { transport.tick() }
+        }
+        // Nor for the skipped banner: wake it when the undo window ends, even while paused.
+        .task(id: transport.bannerHidesAt) {
+            guard let at = transport.bannerHidesAt else { return }
             try? await Task.sleep(until: at, clock: .continuous)
             if !Task.isCancelled { transport.tick() }
         }
@@ -131,7 +152,7 @@ private struct TransportBar: View {
             if Labels.episodeTitle(transport.recording) != transport.recording.title {
                 Text(Labels.episodeTitle(transport.recording)).font(.callout).foregroundStyle(.secondary)
             }
-            Scrubber(progress: transport.progress, scrubbing: transport.scrubPosition != nil)
+            Scrubber(progress: transport.progress, breaks: transport.breakSegments, scrubbing: transport.scrubPosition != nil)
                 .frame(height: 12)
             HStack {
                 Text(transport.elapsedText).accessibilityIdentifier("player.elapsed")
@@ -158,9 +179,46 @@ private struct TransportBar: View {
     }
 }
 
-/// The progress line, with a playhead that grows while scrubbing.
+/// The commercial banner (M4-3), drawn as a focused button: Select acts on it (SPEC 7 "Player
+/// controls"). The remote's input view keeps the real focus, so this is not a `Button`.
+private struct CommercialBannerView: View {
+    let banner: TransportModel.CommercialBanner
+
+    var body: some View {
+        HStack(spacing: 24) {
+            switch banner {
+            case .skipped(let distance):
+                Text(Labels.skippedCommercials(distance))
+                    .font(.callout)
+                    .padding(.horizontal, 24).padding(.vertical, 14)
+                    .background(.regularMaterial, in: Capsule())
+                    .accessibilityIdentifier("player.banner.skippedText")
+                pill(Labels.goBack, systemImage: "gobackward")
+                    .accessibilityIdentifier("player.banner.goBack")
+            case .offer:
+                pill(Labels.skipCommercials, systemImage: "forward.end.fill")
+                    .accessibilityIdentifier("player.banner.skip")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.banner")
+    }
+
+    private func pill(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(.black)
+            .padding(.horizontal, 32).padding(.vertical, 14)
+            .background(.white, in: Capsule())
+            .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+            .scaleEffect(1.05)
+    }
+}
+
+/// The progress line, with commercial breaks marked and a playhead that grows while scrubbing.
 private struct Scrubber: View {
     let progress: Double?
+    let breaks: [ClosedRange<Double>]
     let scrubbing: Bool
 
     var body: some View {
@@ -169,6 +227,11 @@ private struct Scrubber: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.3))
                 Capsule().fill(.white).frame(width: max(0, x))
+                ForEach(Array(breaks.enumerated()), id: \.offset) { _, segment in
+                    Rectangle().fill(.yellow.opacity(0.85))
+                        .frame(width: max(4, geo.size.width * (segment.upperBound - segment.lowerBound)))
+                        .offset(x: geo.size.width * segment.lowerBound)
+                }
                 if progress != nil {
                     Circle().fill(.white)
                         .frame(width: scrubbing ? 32 : 18, height: scrubbing ? 32 : 18)

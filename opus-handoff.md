@@ -51,8 +51,8 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 | ~~M2-7~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
 | ~~M3-3~~ | Done 2026-11-15. See `docs/VLCKIT.md` §13. | |
 | ~~M3-4~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
-| **M3-5** | Write path in the v35 adapter | **A recording the owner nominates** |
-| **M4-3** | Commercial UI | M3-4 |
+| ~~M3-5~~ | Done 2026-11-16. See `docs/ORCHESTRATION.md`. | |
+| ~~M4-3~~ | Done 2026-11-16. See `docs/ORCHESTRATION.md`. | |
 | **M5-1** | Delete | **A recording the owner nominates** |
 | **M5-2, M5-3, M5-4** | Bonjour discovery, states and accessibility, release documents | |
 

@@ -56,6 +56,13 @@ enum Labels {
         }
     }
     static let setBookmark = "Set Bookmark Here"
+    /// The banner after a commercial skip (M4-3): "Skipped commercials · 2:56".
+    static func skippedCommercials(_ distance: Duration) -> String {
+        "Skipped commercials \u{00B7} \(TransportModel.timeText(distance))"
+    }
+    static let goBack = "Go Back"
+    /// Prompt mode's button while a break plays.
+    static let skipCommercials = "Skip Commercials"
     static let subtitlesOff = "Off"
     static let noAudioTracks = "No audio tracks are available."
     static let noSubtitles = "This recording has no subtitles or captions."
