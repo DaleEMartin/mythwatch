@@ -143,8 +143,18 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `reloadAfterPlayback()` on close. For later: Continue Watching shows a part-watched mark, not
   a progress bar (the list has no positions); the context menu on episode rows was not driven by
   a UI test.
+- **M3-3 done and committed** (2026-11-15, same direct Opus session): `PlayerEventMachine` in
+  `MythwatchPlayback` (the SPEC §5 engine rules as a pure struct, 33 tests, 8 mutations caught) and
+  `Player/VLCPlayerEngine.swift`, a thin adapter that feeds it VLC's events and performs its
+  commands (1-byte range GET, reopen). The composition root makes one engine per playback with
+  the saved deinterlace setting. Checklist run on the Apple TV, results in `docs/VLCKIT.md` §13:
+  everything passed, including reopening a recording in progress. For M3-4: the screen hosts
+  `VLCPlayerEngine.videoView`, but `PlaybackSession` takes `any PlayerEngine` and does not expose
+  it, so the player screen needs a way to reach the view (for example make the engine in the
+  screen and pass it through, or a small app-side protocol); captions draw large (VLC's default).
+  Open: the owner did not hear Spanish on 3753's second audio track.
 - **Every task that can run without the owner is done.** Remaining, all needing the owner:
-  M3-3 (real Apple TV), M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
+  M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
   session; do not launch them unattended.
 - The owner will run **M0-3** in a direct Opus session (agreed 2026-11-14).
 - **iPhone app wanted later** (owner, 2026-11-14). Not scheduled. SPEC §11 holds the rules that

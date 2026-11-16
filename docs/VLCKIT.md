@@ -255,3 +255,29 @@ of "at least 4x per second". SPEC §5 gains the engine rules from sections 7 and
 until the first real one, echo seek targets, a premature `Ended` is a failure, a growing file is
 reopened rather than ended, coalesce buffering events, finish the stream on deinit). SPEC §7 records the demuxer option, the deinterlace filter,
 and how the dependency is fetched.
+
+## 13. `VLCPlayerEngine` checklist (M3-3)
+
+Run 2026-11-15 on the Apple TV HD with a temporary harness (not committed) that drove the real
+engine and logged every snapshot. Recordings 3753 (*Morning Report*), 3749 (*Amber Street
+Sessions*) and 3757 (*Counter Offers*, being recorded at the time). GET requests only.
+
+| Check | Result |
+| --- | --- |
+| Load from the beginning, play | `.loading` at 0, then `.playing` from the first position with duration 5397 s; picture and sound |
+| Snapshot rate | 3.91 positions per second while playing (3.87 on the simulator); VLC's buffering events while playing never reached the stream |
+| Pause | `.paused` within 2 ms of the call; no positions while paused |
+| Seek while paused | +60 s shown at once at the target; play resumed from it |
+| Seek while playing | −10 s shown at once; the next positions continued from the landing point |
+| Resume at an offset | load at 1200 s: `.loading` at 1200 s, first position 1200.9 s, never 0 |
+| End of file | `.ended` at exactly the duration (5397.9 s), after the size check found the file unchanged |
+| Missing recording (404) | `.failed` within 40 ms (VLC sent Error this time, not the Ended of §7.4; both are covered) |
+| Unreachable address | `.failed` within 30 ms |
+| Recording in progress | started 25 s behind live; VLC ended twice at the size it had seen, the engine reopened each time (gaps 0.88 s and 1.09 s, positions continuous), never `.ended` |
+| Audio tracks | both listed (3749: "English", "Spanish"; 3753: "Track 1", "Track 2", no language); switching to track 2 took effect according to VLC. The owner did not hear Spanish on 3753; its second track may not be a second language |
+| Captions | four caption tracks listed; captions showed on screen (owner: "quite large") and went away when turned off |
+| Deinterlace on / off | both played with no errors; no visible difference reported (as in §3) |
+| Stream end | every released engine finished its `snapshots` stream |
+
+On the simulator, `basement.local` does not resolve (VLC stays in Opening with no further
+event); the bare name works there. On the Apple TV it is the other way round (§8).

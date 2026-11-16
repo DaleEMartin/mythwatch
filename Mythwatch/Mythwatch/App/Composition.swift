@@ -16,10 +16,12 @@ enum Composition {
         #endif
         var registry = AdapterRegistry()
         registry.register(V35AdapterFactory())
+        let settings = UserDefaultsSettingsStore()
         return AppModel(
-            settings: UserDefaultsSettingsStore(),
+            settings: settings,
             connector: BackendConnector(registry: registry, transport: URLSessionTransport()),
-            makeEngine: { preconditionFailure("The player arrives in M3-3.") },
+            // One engine per playback, with the deinterlace setting as saved at that moment (SPEC 7).
+            makeEngine: { VLCPlayerEngine(deinterlace: settings.load().deinterlace) },
             discovery: NoBackendDiscovery(),
             now: { ContinuousClock.now })
     }

@@ -39,7 +39,7 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
   player engine: domain, backend seam, v35 read path, settings, library builder, every view
   model, the playback session, and the commercial skipper wired into it. 868 tests, under 2 s.
 - `Mythwatch/` (the tvOS app) has the library and settings screens (M2-7), UI tests on the fakes
-  (`-MythwatchFakes`, Debug only), and embeds TVVLCKit, unused until M3-3. No player yet.
+  (`-MythwatchFakes`, Debug only), and `VLCPlayerEngine` (M3-3). No player screen yet.
 - Every write method in the v35 adapter is a stub that sends nothing and throws `.rejected`.
   No code in the repo can POST to a backend until M3-5.
 
@@ -49,7 +49,7 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 | --- | --- | --- |
 | ~~M0-3~~ | Done 2026-11-15: go. See `docs/VLCKIT.md`. | |
 | ~~M2-7~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
-| **M3-3** | `VLCPlayerEngine` | M0-3 done; real Apple TV |
+| ~~M3-3~~ | Done 2026-11-15. See `docs/VLCKIT.md` §13. | |
 | **M3-4** | Player screen | M3-3 |
 | **M3-5** | Write path in the v35 adapter | **A recording the owner nominates** |
 | **M4-3** | Commercial UI | M3-4 |

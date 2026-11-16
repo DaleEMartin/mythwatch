@@ -378,6 +378,44 @@ behaves this way:
 - **Stream.** `snapshots` finishes only when the engine is deallocated. One engine serves one
   playback.
 
+**`PlayerEventMachine`** (M3-3). The engine rules as a pure `Sendable` struct in
+`MythwatchPlayback`, so they are unit-tested without a player. `VLCPlayerEngine` feeds it inputs
+and does what it says; it decides nothing itself.
+
+```swift
+public struct PlayerEventMachine: Sendable {
+    public enum Input { case load(startAt: Duration?), seekRequested(Duration), stopRequested,
+        playerPlaying, playerPaused, playerBuffering(isPlaying: Bool), playerPosition(Duration, duration: Duration?),
+        playerEnded, playerError, playerStopped, openedSize(Int64?), currentSize(Int64?) }
+    public enum Command { case measureOpenedSize, checkCurrentSize, reopen(at: Duration) }
+    public var snapshot: PlayerSnapshot { get }
+    public mutating func handle(_ input: Input) -> Output      // Output: emit: Bool, commands: [Command]
+    public static func tracks(names: [String], ids: [Int]) -> [MediaTrack]
+}
+```
+
+- `load` resets everything, emits `.loading` at `startAt ?? 0` (no duration, rate 0) and asks for
+  the file's size (`measureOpenedSize`; the engine answers with `openedSize`).
+- Until the first position: `playerPlaying` and buffering change nothing; `playerPaused` gives
+  `.paused` at the held position; a seek moves the held position. The first `playerPosition` gives
+  `.playing`, rate 1 (or stays `.paused`) with the duration (zero or nil = unknown, never 0).
+- Every position is emitted. Buffering with `isPlaying == true` is noise; with `false` while
+  `.playing` it is one `.buffering` (rate 0), ended by `playerPlaying` or the next position.
+  `playerPlaying` after a pause gives `.playing`. A position that arrives while `.paused` updates
+  the position only.
+- `seekRequested` emits the target at once with the status unchanged (ignored before `load`,
+  after the end, after a failure or `stop`). `stopRequested` gives `.idle` at 0, duration kept;
+  every later player event is ignored. `playerStopped` is always ignored.
+- `playerEnded` before any position since `load` is `.failed` (the 404 rule). Otherwise nothing is
+  emitted and the engine is told `checkCurrentSize`. The answer: bigger than the opened size →
+  `.buffering` and `reopen(at:)` the last position (the new size becomes the opened size, and VLC's
+  0 is again held back until the first position); not bigger, or the opened size unknown → `.ended`
+  at the duration (else the last position), rate 0; unknown (the check failed) → `.failed`, so a
+  show still recording is never taken as finished. An end right after a reopen checks again.
+- `playerError` is `.failed` with a fixed internal message (VLCKit 3 gives no reason).
+- `tracks` drops negative ids ("Disable") and turns "Track 1 - [English]" into name and language
+  "English"; other names are kept with no language.
+
 ### 5.1 `CommercialSkipper`
 
 A value type holding state; every method returns effects and performs none. Time arrives only as
@@ -1212,7 +1250,11 @@ The transport bar shows elapsed and remaining time, a scrubber with commercial b
 marked segments, and the title. It hides after 5 s of no input. Publish Now Playing info and
 handle remote commands through `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`.
 
-`VLCPlayerEngine` implements `PlayerEngine` over VLCKit. It is the only file that imports VLCKit
+`VLCPlayerEngine` (`Player/VLCPlayerEngine.swift`) implements `PlayerEngine` over VLCKit as a thin
+adapter around `PlayerEventMachine` (§5): VLC's events become inputs, the machine's commands become a
+1-byte range GET on the stream URL (`Range: bytes=0-0`, total from `Content-Range`) or a reopen. It
+exposes `videoView`, the `UIView` VLC draws into, for the player screen. The composition root makes
+one per playback with `AppSettings.deinterlace` as saved at that moment. It is the only file that imports VLCKit
 (`#if os(tvOS) import TVVLCKit #else import MobileVLCKit #endif`). It follows the engine rules in
 section 5 and the findings in `docs/VLCKIT.md`, in particular:
 
