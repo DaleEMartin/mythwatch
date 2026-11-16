@@ -453,8 +453,19 @@ struct V35MediaTests {
 struct ErrorCase: CustomTestStringConvertible, Sendable {
     let name: String
     let pathStub: String
+    var method: HTTPRequest.Method = .get
     let run: @Sendable (FixtureTransport) async throws -> Void
     var testDescription: String { name }
+
+    init(
+        name: String, pathStub: String, method: HTTPRequest.Method = .get,
+        run: @escaping @Sendable (FixtureTransport) async throws -> Void
+    ) {
+        self.name = name
+        self.pathStub = pathStub
+        self.method = method
+        self.run = run
+    }
 
     static let all: [ErrorCase] = [
         ErrorCase(name: "list", pathStub: "/Dvr/GetRecordedList") {
@@ -473,7 +484,9 @@ struct ErrorCase: CustomTestStringConvertible, Sendable {
         ErrorCase(name: "bookmark", pathStub: "/Dvr/GetSavedBookmark") {
             _ = try await PositionCall.bookmark.run($0)
         },
-    ]
+    ] + WriteCase.all.map { w in
+        ErrorCase(name: w.name, pathStub: w.pathStub, method: .post, run: w.run)
+    }
 }
 
 @Suite("V35 error mapping")
@@ -481,7 +494,7 @@ struct V35ErrorTests {
     @Test(arguments: ErrorCase.all)
     func html404IsHTTPError(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, status: 404, headers: ["Content-Type": "text/html"],
+        t.stub(c.method, path: c.pathStub, status: 404, headers: ["Content-Type": "text/html"],
                body: try fixture("not-found.html"))
         await #expect(throws: BackendError.http(status: 404, message: "404 Not Found")) {
             try await c.run(t)
@@ -491,7 +504,7 @@ struct V35ErrorTests {
     @Test(arguments: ErrorCase.all)
     func status400IsRejectedWithMessage(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, status: 400, headers: ["Content-Type": "text/html"],
+        t.stub(c.method, path: c.pathStub, status: 400, headers: ["Content-Type": "text/html"],
                body: "<html><body><h1>400 Bad Request</h1><p>RecordedId is invalid</p></body></html>")
         await #expect(throws: BackendError.rejected("400 Bad Request RecordedId is invalid")) {
             try await c.run(t)
@@ -501,14 +514,14 @@ struct V35ErrorTests {
     @Test(arguments: ErrorCase.all)
     func status400WithoutBodyIsStillRejected(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, status: 400, body: "")
+        t.stub(c.method, path: c.pathStub, status: 400, body: "")
         await #expect(throws: BackendError.rejected("HTTP 400")) { try await c.run(t) }
     }
 
     @Test(arguments: ErrorCase.all)
     func wrongShapeIsMalformed(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, body: #"{"Unexpected": [1, 2, 3]}"#)
+        t.stub(c.method, path: c.pathStub, body: #"{"Unexpected": [1, 2, 3]}"#)
         do {
             try await c.run(t)
             Issue.record("expected a throw")
@@ -523,7 +536,7 @@ struct V35ErrorTests {
     @Test(arguments: ErrorCase.all)
     func notJSONIsMalformed(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, body: "<html>not json</html>")
+        t.stub(c.method, path: c.pathStub, body: "<html>not json</html>")
         do {
             try await c.run(t)
             Issue.record("expected a throw")
@@ -538,7 +551,7 @@ struct V35ErrorTests {
     @Test(arguments: ErrorCase.all)
     func transportErrorsPassThroughUnchanged(_ c: ErrorCase) async throws {
         let t = FixtureTransport()
-        t.stub(.get, path: c.pathStub, failure: .unreachable("no route"))
+        t.stub(c.method, path: c.pathStub, failure: .unreachable("no route"))
         await #expect(throws: BackendError.unreachable("no route")) { try await c.run(t) }
     }
 
@@ -557,15 +570,124 @@ struct V35ErrorTests {
     }
 }
 
-// MARK: - Write stubs: no request, a BackendError
+// MARK: - Writes (M3-5)
 
-@Suite("V35 write stubs (not implemented until M3-5 / M5-1)")
-struct V35WriteStubTests {
+private let formHeaders = [
+    "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded",
+]
+
+private func body(_ request: HTTPRequest) -> String {
+    String(decoding: request.body ?? Data(), as: UTF8.self)
+}
+
+enum PositionWrite: CaseIterable, CustomTestStringConvertible {
+    case resume, bookmark
+    var testDescription: String { self == .resume ? "setResumePosition" : "setBookmark" }
+    var path: String { self == .resume ? "/Dvr/SetLastPlayPos" : "/Dvr/SetSavedBookmark" }
+
+    func run(_ t: FixtureTransport, _ position: Duration?, id: Int = 33) async throws {
+        let s = V35PlaybackStateService(connection: connection, transport: t)
+        let rid = RecordingID(rawValue: id)
+        if self == .resume {
+            try await s.setResumePosition(position, for: rid)
+        } else {
+            try await s.setBookmark(position, for: rid)
+        }
+    }
+}
+
+@Suite("V35 writes")
+struct V35WriteTests {
     private let id = RecordingID(rawValue: 33)
 
-    private func expectStub(_ t: FixtureTransport, _ body: () async throws -> Void) async {
+    @Test(arguments: [true, false])
+    func setWatchedRequestIsExact(_ watched: Bool) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: "/Dvr/UpdateRecordedWatchedStatus", body: try fixture("bool-true"))
+        try await recordingsService(t).setWatched(watched, id: id)
+        let req = try #require(t.requests.first)
+        #expect(t.requests.count == 1)
+        #expect(req.method == .post)
+        #expect(path(req) == "/Dvr/UpdateRecordedWatchedStatus")
+        #expect(req.url.query == nil)
+        #expect(req.headers == formHeaders)
+        #expect(body(req) == "RecordedId=33&Watched=\(watched)")
+    }
+
+    @Test(arguments: PositionWrite.allCases)
+    func positionRequestIsExact(_ call: PositionWrite) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: call.path, body: try fixture("bool-true"))
+        try await call.run(t, .seconds(700) + .milliseconds(266))
+        let req = try #require(t.requests.first)
+        #expect(t.requests.count == 1)
+        #expect(req.method == .post)
+        #expect(req.url.query == nil)
+        #expect(req.headers == formHeaders)
+        #expect(body(req) == "RecordedId=33&OffsetType=Duration&Offset=700266")
+    }
+
+    @Test(arguments: PositionWrite.allCases)
+    func subMillisecondsAreTruncated(_ call: PositionWrite) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: call.path, body: try fixture("bool-true"))
+        try await call.run(t, .milliseconds(1_234) + .microseconds(999))
+        #expect(body(try #require(t.requests.first)) == "RecordedId=33&OffsetType=Duration&Offset=1234")
+    }
+
+    @Test(arguments: PositionWrite.allCases)
+    func largePositionIsExact(_ call: PositionWrite) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: call.path, body: try fixture("bool-true"))
+        try await call.run(t, .seconds(4 * 3600) + .milliseconds(1))
+        #expect(body(try #require(t.requests.first)) == "RecordedId=33&OffsetType=Duration&Offset=14400001")
+    }
+
+    /// Clearing sends a raw frame offset of 0: with `OffsetType=Duration` the backend maps 0 to
+    /// the nearest keyframe and may store that instead of clearing (docs/BACKEND-V35.md).
+    @Test(arguments: PositionWrite.allCases, [nil, Duration.zero, .microseconds(999)])
+    func clearingSendsFrameZero(_ call: PositionWrite, _ position: Duration?) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: call.path, body: try fixture("bool-true"))
+        try await call.run(t, position)
+        #expect(body(try #require(t.requests.first)) == "RecordedId=33&OffsetType=Frame&Offset=0")
+    }
+
+    @Test(arguments: PositionWrite.allCases)
+    func negativePositionIsRejectedWithoutARequest(_ call: PositionWrite) async throws {
+        let t = FixtureTransport()
         do {
-            try await body()
+            try await call.run(t, .seconds(-1))
+            Issue.record("expected a throw")
+        } catch let error as BackendError {
+            guard case .rejected = error else {
+                Issue.record("expected .rejected, got \(error)")
+                return
+            }
+        }
+        #expect(t.requests.isEmpty)
+    }
+
+    @Test(arguments: WriteCase.all, ["bool-true", "bool-true-string"])
+    func trueIsSuccess(_ c: WriteCase, _ name: String) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: c.pathStub, body: try fixture(name))
+        try await c.run(t)
+    }
+
+    @Test(arguments: WriteCase.all, [#"{"bool": false}"#, #"{"bool": "false"}"#])
+    func falseIsRejected(_ c: WriteCase, _ reply: String) async throws {
+        let t = FixtureTransport()
+        t.stub(.post, path: c.pathStub, body: reply)
+        await #expect(throws: BackendError.rejected("\(c.pathStub) returned false")) {
+            try await c.run(t)
+        }
+    }
+
+    @Test func deleteStillSendsNothingUntilM51() async {
+        let t = FixtureTransport()
+        do {
+            try await recordingsService(t).delete(id: id, allowRerecord: false)
             Issue.record("expected a throw")
         } catch let error as BackendError {
             guard case .rejected = error else {
@@ -576,32 +698,32 @@ struct V35WriteStubTests {
             Issue.record("expected BackendError, got \(error)")
         }
         #expect(t.requests.isEmpty)
-        #expect(t.unmatchedRequests.isEmpty)
     }
+}
 
-    @Test func setWatchedSendsNothing() async {
-        let t = FixtureTransport()
-        await expectStub(t) { try await recordingsService(t).setWatched(true, id: id) }
-    }
+struct WriteCase: CustomTestStringConvertible, Sendable {
+    let name: String
+    let pathStub: String
+    let run: @Sendable (FixtureTransport) async throws -> Void
+    var testDescription: String { name }
 
-    @Test func deleteSendsNothing() async {
-        let t = FixtureTransport()
-        await expectStub(t) { try await recordingsService(t).delete(id: id, allowRerecord: false) }
-    }
-
-    @Test func setResumePositionSendsNothing() async {
-        let t = FixtureTransport()
-        let s = V35PlaybackStateService(connection: connection, transport: t)
-        await expectStub(t) { try await s.setResumePosition(.seconds(5), for: id) }
-        await expectStub(t) { try await s.setResumePosition(nil, for: id) }
-    }
-
-    @Test func setBookmarkSendsNothing() async {
-        let t = FixtureTransport()
-        let s = V35PlaybackStateService(connection: connection, transport: t)
-        await expectStub(t) { try await s.setBookmark(.seconds(5), for: id) }
-        await expectStub(t) { try await s.setBookmark(nil, for: id) }
-    }
+    static let all: [WriteCase] = [
+        WriteCase(name: "setWatched", pathStub: "/Dvr/UpdateRecordedWatchedStatus") {
+            try await recordingsService($0).setWatched(true, id: RecordingID(rawValue: 1))
+        },
+        WriteCase(name: "setResumePosition", pathStub: "/Dvr/SetLastPlayPos") {
+            try await PositionWrite.resume.run($0, .seconds(5), id: 1)
+        },
+        WriteCase(name: "clearResumePosition", pathStub: "/Dvr/SetLastPlayPos") {
+            try await PositionWrite.resume.run($0, nil, id: 1)
+        },
+        WriteCase(name: "setBookmark", pathStub: "/Dvr/SetSavedBookmark") {
+            try await PositionWrite.bookmark.run($0, .seconds(5), id: 1)
+        },
+        WriteCase(name: "clearBookmark", pathStub: "/Dvr/SetSavedBookmark") {
+            try await PositionWrite.bookmark.run($0, nil, id: 1)
+        },
+    ]
 }
 
 // MARK: - Factory and adapter

@@ -170,6 +170,17 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   `tick()`). For later: the show page underneath is not refreshed after playback (the library and
   episode page are); the swipe-down panel and scrubbing cannot be driven by XCUIRemote, so they were
   checked by hand only.
+- **M3-5 done and committed** (2026-11-16, direct Opus session with the owner): the v35 write path.
+  `V35Client.postExpectingTrue` (form-urlencoded body, no query, `{"bool": false}` → `.rejected`);
+  `setWatched`, `setResumePosition`, `setBookmark` implemented; `delete` is still a stub for M5-1.
+  **Clearing sends `OffsetType=Frame&Offset=0`**, not `Duration` 0: the source shows Duration 0 is
+  snapped to the first keyframe at or after 0 ms when the seek table has no entry at 0, so it may
+  store a position instead of clearing (`BACKEND-V35.md`, "Playback state"). Live on 3749 only (14
+  POSTs): bool shape is a bare `true`; flags change at once in `GetRecorded` and the list; 600000 ms
+  reads back 598698; mythfrontend offered 9:58 (the owner played it; the position was unchanged);
+  both clear forms worked on 3749. Left as found (unwatched, no position, no bookmark).
+  `FakeBackendStore` already matched (zero clears). Capabilities unchanged. For M5-1: reuse
+  `postExpectingTrue`; the player's "Couldn't save your place." should no longer appear.
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its
@@ -246,8 +257,8 @@ itself and works from `opus-handoff.md` in the repo root.
 - The owner's MythTV backend is host `basement`, `http://basement:6544`, version **v35.0**.
   It is a working DVR.
 - GET requests are fine. **No POST of any kind** unless the owner has nominated a recording for
-  that specific check. No POST has ever been sent from this project; every write call in
-  `BACKEND-V35.md` is from reading source and unverified.
+  that specific check. The only POSTs ever sent from this project went to recording 3749 in M3-5
+  (watched, last play position, bookmark; left as found). `DeleteRecording` is still unverified.
 - MythTV source reference: `../mythtv`, branch `fixes/35`. Read-only, GPL: never copy code from it.
   Do not switch its branch to `master`; master's DB schema (1385) is newer than basement's (1384).
 - The owner's other tvOS project `../cable-82-tv` is the model for project layout and the

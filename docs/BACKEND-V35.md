@@ -10,8 +10,11 @@ Each statement below is marked:
   committed fixtures in `MythwatchKit/Tests/MythBackendV35Tests/Fixtures/` are from these calls).
 - **[source]** read from the v35 source, not exercised live.
 - **[verify]** an assumption; the task that depends on it must check it first.
+- **[live write]** observed on the owner's v35.0 backend with a POST to the one nominated
+  recording (id 3749), M3-5, 2026-11-16.
 
-No write call (POST) has been exercised live yet. Every write is [source] at best.
+`UpdateRecordedWatchedStatus`, `SetLastPlayPos` and `SetSavedBookmark` are [live write].
+`DeleteRecording` is still [source] until M5-1.
 
 ## General
 
@@ -24,11 +27,9 @@ No write call (POST) has been exercised live yet. Every write is [source] at bes
 - Scalar results are wrapped by type name: `{"String": "x"}`, `{"bool": true}`, `{"long": "0"}`.
   A `long` arrives as a **string**. [live for String and long] The serialiser writes `int`,
   `uint`, `qlonglong` and `qulonglong` as JSON numbers, `bool` as a bare `true`/`false`, and every
-  other scalar type (including `long`) as a quoted string. [source] `{"bool": ...}` is
-  **[verify]**: no read-only GET in v35 returns a bool (every bool-returning method is POST-only,
-  or named `Set...`, which defaults to POST), so it cannot be observed without a write; settle it
-  in the first task that performs a nominated write. Decode bool and numeric scalars leniently:
-  accept a JSON bool/number or a string holding one.
+  other scalar type (including `long`) as a quoted string. [source] `{"bool": true}` with a bare
+  JSON `true`, `Content-Type: application/json; charset="UTF-8"`, HTTP 200. [live write] Decode
+  bool and numeric scalars leniently anyway: accept a JSON bool/number or a string holding one.
 - JSON replies carry `Content-Type: application/json; charset="UTF-8"` (quoted charset) and
   escape `/` as `\/`; any JSON decoder handles both. Doubles are written with six decimals
   (`"Stars": 0.000000`). [live]
@@ -204,14 +205,22 @@ zeros, and **`"Recording": null`** and `"Artwork": null`. [live] The adapter mus
 `BackendError.notFound`: treat `Title == null`, `Recording == null`, or a missing/zero
 `Recording.RecordedId` as not found.
 
-### `POST /Dvr/UpdateRecordedWatchedStatus` [source]
+### `POST /Dvr/UpdateRecordedWatchedStatus` [live write]
 
-**Not implemented until M3-5 / M5-1.** `V35RecordingsService.setWatched` sends no request and throws `BackendError.rejected("not implemented until M3-5 / M5-1")`. The same holds for every write below (`delete`, `setResumePosition`, `setBookmark`).
+Every write goes through `V35Client.postExpectingTrue`: no query string, headers
+`Accept: application/json` and `Content-Type: application/x-www-form-urlencoded`, body
+`name=value&...`. `{"bool": false}` → `.rejected("<path> returned false")`; HTTP and decoding
+errors map as for reads. [live write: the form body is accepted]
 
-Form fields `RecordedId`, `Watched=true|false`. Returns `{"bool": true}`; `false` when the
-recording does not exist → `BackendError.rejected`.
+Form fields `RecordedId`, `Watched=true|false`. Returns `{"bool": true}`, and `WATCHED` appears
+in (or leaves) `ProgramFlagNames` at once, from both `GetRecorded` and `GetRecordedList`. [live
+write] Returns `false` when the recording does not exist or has no file → `.rejected`. [source;
+not tried live: only the nominated recording may receive a POST]
 
 ### `POST /Dvr/DeleteRecording` [source]
+
+**Not implemented until M5-1.** `V35RecordingsService.delete` sends no request and throws
+`BackendError.rejected("not implemented until M5-1")`.
 
 Form fields `RecordedId`, `ForceDelete=false`, `AllowRerecord=<bool>`. Returns `{"bool": true}`
 when the delete was **queued**; deletion is asynchronous. `false` → `.rejected`. Until it
@@ -222,22 +231,32 @@ recording group, which `IgnoreDeleted=true` filters out.
 
 ## Playback state
 
-Use `OffsetType=Duration` everywhere: offsets are **milliseconds** from the start of the file.
+Use `OffsetType=Duration` (offsets in **milliseconds** from the start of the file) everywhere
+except clearing, below.
 
 | Call | Parameters | Result |
 | --- | --- | --- |
 | `GET /Dvr/GetLastPlayPos` [live] | `RecordedId`, `OffsetType=Duration` | `{"long": "<ms>"}` (seen `"0"` and `"581614"`); `"0"` means none → nil. `"-1"` when the stored position cannot be converted to a duration (no seek table) [source] → nil |
 | `GET /Dvr/GetSavedBookmark` [live] | same | same (including `"-1"`) [source] |
-| `POST /Dvr/SetLastPlayPos` [source] | `RecordedId`, `OffsetType=Duration`, `Offset=<ms>` | `{"bool": ...}` |
-| `POST /Dvr/SetSavedBookmark` [source] | same | same |
+| `POST /Dvr/SetLastPlayPos` [live write] | `RecordedId`, `OffsetType=Duration`, `Offset=<ms>` | `{"bool": true}`; sets `LASTPLAYPOS` |
+| `POST /Dvr/SetSavedBookmark` [live write] | same | `{"bool": true}`; sets `BOOKMARK` |
+
+The adapter sends whole milliseconds, truncated; a position under 1 ms clears, and a negative
+one is rejected by the adapter without a request.
 
 - The backend converts the duration to a keyframe using the recording's seek table and returns
   `false` if that lookup fails (for example no seek table). [source] Map `false` to `.rejected`;
   `PlaybackSession` treats a failed save as non-fatal.
 - A negative `Offset` raises a service exception (HTTP 400). [source]
-- Clearing: send `Offset=0`. [verify] that this removes the mark and clears the
-  `LASTPLAYPOS` / `BOOKMARK` flag; if it does not, find the clearing call in `v2dvr.cpp`
-  (`UpdateRecordedMetadata` is the newer combined call) and update this document.
+- **Clearing: the adapter sends `OffsetType=Frame&Offset=0`.** Any offset type other than
+  `Position` or `Duration` is taken as a raw frame number, and saving frame 0 removes the mark and
+  clears the `LASTPLAYPOS` / `BOOKMARK` flag. [source, live write] `OffsetType=Duration&Offset=0`
+  is not used: the backend first maps 0 ms to a keyframe (the last seek-table entry at or before
+  0 ms, else the **first one after it**) and saves that frame, so on a recording whose seek table
+  has no entry at 0 ms it stores a small position instead of clearing. [source] On recording 3749
+  it did clear, because that table has an entry at 0. [live write] Both forms reply `{"bool": true}`.
+- Writing 600000 ms read back as 598698 ms (the keyframe at or before it), for both calls, and
+  mythfrontend offered to resume at 9:58 on the same recording. [live write]
 - A value read back can differ slightly from the value written because of the keyframe
   round trip. Tests must not assert exact equality against a live backend.
 
@@ -289,7 +308,7 @@ Every read goes through one helper (`V35Client`): `Accept: application/json`; HT
 ## Capabilities reported by the v35 adapter
 
 `.recordings`, `.resumePosition`, `.bookmarks`, `.commercialBreaks`, `.deleteRecording`.
-The adapter advertises `.deleteRecording` although `delete` is a stub until M3-5 (listed as the document says; see the status note on the write endpoints). `liveTV` and `videoLibrary` are nil.
+The adapter advertises `.deleteRecording` although `delete` is a stub until M5-1 (listed as the document says). The other write capabilities (`.resumePosition`, `.bookmarks`, and watched under `.recordings`) are implemented as of M3-5. `liveTV` and `videoLibrary` are nil.
 `supports(version)` is true for `major == 35` only.
 
 ## Known differences in later versions (for whoever writes the next adapter)

@@ -25,7 +25,7 @@ struct V35Adapter: BackendAdapter {
     let media: any MediaLocator
 
     /// Per docs/BACKEND-V35.md, "Capabilities". `.deleteRecording` is listed although `delete`
-    /// is a stub until M3-5 / M5-1.
+    /// is a stub until M5-1.
     var capabilities: BackendCapabilities {
         [.recordings, .resumePosition, .bookmarks, .commercialBreaks, .deleteRecording]
     }

@@ -1490,7 +1490,7 @@ Tests of the fake live in `MythwatchPlaybackTests`, which depends on `MythwatchT
 The suite is version-neutral: it names no endpoint path or wire key, and knows an adapter only
 through `BackendAdapter` and the domain ports. It never calls a write method (`setWatched`,
 `delete`, `setResumePosition`, `setBookmark`); **write behaviour is outside the suite for now**,
-so an adapter that advertises a write capability whose method is still a stub (v35 until M3-5)
+so an adapter that advertises a write capability whose method is still a stub (v35 `delete` until M5-1)
 is not in violation.
 
 ```swift

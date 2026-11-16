@@ -42,9 +42,34 @@ struct V35Client: Sendable {
 
     /// GET with `Accept: application/json`; returns the body of a 2xx reply.
     func get(path: String, query: [(name: String, value: String)]) async throws -> Data {
-        let request = HTTPRequest(
-            method: .get, url: url(path: path, query: query),
-            headers: ["Accept": "application/json"])
+        try await send(
+            HTTPRequest(
+                method: .get, url: url(path: path, query: query),
+                headers: ["Accept": "application/json"]))
+    }
+
+    /// POST of a `bool`-returning method with a form-urlencoded body and no query string
+    /// (docs/BACKEND-V35.md, "General"). `{"bool": false}` throws `.rejected`.
+    func postExpectingTrue(path: String, form: [(name: String, value: String)]) async throws {
+        let body = form.map { "\($0.name)=\(Self.encode($0.value))" }.joined(separator: "&")
+        let data = try await send(
+            HTTPRequest(
+                method: .post, url: url(path: path, query: []),
+                headers: [
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                ],
+                body: Data(body.utf8)))
+        let ok: Bool
+        do {
+            ok = try JSONDecoder().decode(BoolEnvelopeDTO.self, from: data).value
+        } catch {
+            throw BackendError.malformedResponse("\(path): unexpected response shape")
+        }
+        if !ok { throw BackendError.rejected("\(path) returned false") }
+    }
+
+    private func send(_ request: HTTPRequest) async throws -> Data {
         let response = try await transport.send(request)
         switch response.status {
         case 200..<300:

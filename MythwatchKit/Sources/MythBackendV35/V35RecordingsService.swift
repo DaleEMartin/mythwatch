@@ -2,8 +2,8 @@ import Foundation
 import MythwatchBackend
 import MythwatchDomain
 
-/// `GetRecordedList` (paged) and `GetRecorded`. Write methods are not implemented until
-/// M3-5 / M5-1 and send no request.
+/// `GetRecordedList` (paged), `GetRecorded` and `UpdateRecordedWatchedStatus`. `delete` is not
+/// implemented until M5-1 and sends no request.
 struct V35RecordingsService: RecordingsService {
     /// Page size from docs/BACKEND-V35.md, "Recordings".
     static let defaultPageSize = 200
@@ -56,7 +56,9 @@ struct V35RecordingsService: RecordingsService {
     }
 
     func setWatched(_ watched: Bool, id: RecordingID) async throws {
-        throw V35NotImplemented.error
+        try await client.postExpectingTrue(
+            path: "/Dvr/UpdateRecordedWatchedStatus",
+            form: [("RecordedId", String(id.rawValue)), ("Watched", watched ? "true" : "false")])
     }
 
     func delete(id: RecordingID, allowRerecord: Bool) async throws {
@@ -64,7 +66,7 @@ struct V35RecordingsService: RecordingsService {
     }
 }
 
-/// What every write stub throws, before any request is built.
+/// What the `delete` stub throws, before any request is built.
 enum V35NotImplemented {
-    static let error = BackendError.rejected("not implemented until M3-5 / M5-1")
+    static let error = BackendError.rejected("not implemented until M5-1")
 }
