@@ -112,4 +112,65 @@ struct AppModelPlaybackSessionTests {
         #expect(engine.calls.last == .seek(to: .seconds(80)))
         _ = await session.finish()
     }
+
+    // MARK: Leaving and retrying (M3-4)
+
+    @Test func finishingPlaybackSavesTheplaceThenReloadsTheLibrary() async throws {
+        let adapter = FakeBackendAdapter(recordings: [recording])
+        let engines = EngineFactory()
+        let model = await connectedModel(
+            AppSettings(backend: alpha), adapter: adapter, engines: engines, clock: TestClock())
+        let library = model.makeLibraryModel()
+        await library.load()
+        #expect(library.library.value?.continueWatching.isEmpty == true)
+
+        let session = model.makePlaybackSession(recording, start: .beginning)
+        await session.start()
+        let engine = try #require(engines.made.first)
+        engine.emit(PlayerSnapshot(status: .playing, position: .seconds(300), duration: .seconds(1800), rate: 1))
+        await engine.waitUntilDelivered()
+
+        let outcome = await model.finishPlayback(session)
+        #expect(outcome.position == .seconds(300))
+        #expect(engine.calls.last == .stop)
+        // The reload ran after the save: the library already shows the recording as part watched.
+        #expect(adapter.recordingsFake.calls == [.allRecordings, .allRecordings])
+        #expect(library.library.value?.continueWatching.map(\.id) == [recording.id])
+    }
+
+    @Test func finishingPlaybackWithNoLibraryModelStillFinishes() async {
+        let adapter = FakeBackendAdapter(recordings: [recording])
+        let model = await connectedModel(
+            AppSettings(backend: alpha), adapter: adapter, engines: EngineFactory(), clock: TestClock())
+        let session = model.makePlaybackSession(recording, start: .beginning)
+        let outcome = await model.finishPlayback(session)
+        #expect(outcome == PlaybackOutcome(position: .zero, reachedEnd: false, markedWatched: false))
+        #expect(adapter.recordingsFake.calls.isEmpty)
+    }
+
+    @Test func retryFinishesTheFailedSessionThenResumesWhereItStopped() async throws {
+        let adapter = FakeBackendAdapter(recordings: [recording])
+        let engines = EngineFactory()
+        let model = await connectedModel(
+            AppSettings(backend: alpha), adapter: adapter, engines: engines, clock: TestClock())
+        let library = model.makeLibraryModel()
+        await library.load()
+
+        let failed = model.makePlaybackSession(recording, start: .beginning)
+        await failed.start()
+        let first = try #require(engines.made.first)
+        first.emit(PlayerSnapshot(status: .playing, position: .seconds(500), duration: .seconds(1800), rate: 1))
+        first.emitFailed("diag")
+        await first.waitUntilDelivered()
+
+        let retry = await model.retryPlayback(failed, recording: recording)
+        #expect(first.calls.last == .stop)
+        #expect(engines.made.count == 2)
+        #expect(adapter.recordingsFake.calls == [.allRecordings])  // no library reload for a retry
+
+        await retry.start()
+        let second = try #require(engines.made.last)
+        #expect(second.calls.first == .load(url: adapter.mediaFake.streamURL(for: recording), startAt: .seconds(500)))
+        _ = await retry.finish()
+    }
 }

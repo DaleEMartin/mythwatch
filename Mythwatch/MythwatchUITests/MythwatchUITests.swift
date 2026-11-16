@@ -83,6 +83,41 @@ final class MythwatchUITests: XCTestCase {
     }
 
     @MainActor
+    func testPlayFromTheEpisodePageThenLeave() {
+        launch(backendSaved: true)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        press(.down, untilFocusedPrefix: "card.continueWatching.")
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        let title = app.staticTexts["detail.title"].label
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.start.beginning"], limit: 4)
+        remote.press(.select)
+
+        // The player: the remote's input view has focus, and the transport bar is up.
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForFocus(prefix: "player.input"))
+        let transport = app.otherElements["player.transport"]
+        XCTAssertTrue(transport.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "0:00")
+        attachScreenshot("7-player")
+
+        // Playing with no input, the bar hides after 5 s; pausing brings it back.
+        let hidden = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: transport)
+        wait(for: [hidden], timeout: 10)
+        remote.press(.playPause)
+        XCTAssertTrue(transport.waitForExistence(timeout: 3))
+        sleep(6)
+        XCTAssertTrue(transport.exists, "the bar stays while paused")
+
+        // Menu leaves the player for the episode page it came from.
+        remote.press(.menu)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["detail.title"].label, title)
+        XCTAssertFalse(app.otherElements["player.screen"].exists)
+    }
+
+    @MainActor
     func testSettingsShowsTheConnectedBackend() {
         launch(backendSaved: true)
         XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))

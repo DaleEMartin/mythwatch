@@ -607,9 +607,15 @@ public enum SkipBanner: Sendable, Equatable {
     public func start() async          // loads breaks and start position, then loads the engine and plays
     public func togglePlayPause()
     public func skipForward(); public func skipBackward()
+    public func skip(by offset: Duration)   // M3-4: a remote command's own interval; negative = back
     public func seek(to: Duration)     // user scrub commit
     public func undoCommercialSkip(); public func acceptSkipOffer()
     public func setBookmarkHere() async
+    // M3-4, "Screen access" below:
+    public let engine: any PlayerEngine
+    public var audioTracks: [MediaTrack] { get }; public var subtitleTracks: [MediaTrack] { get }
+    public var selectedAudioTrack: MediaTrack.ID? { get }; public var selectedSubtitleTrack: MediaTrack.ID? { get }
+    public func selectAudioTrack(_ id: MediaTrack.ID?); public func selectSubtitleTrack(_ id: MediaTrack.ID?)
     public func finish() async -> PlaybackOutcome   // called when the player screen closes or playback ends
 }
 
@@ -774,6 +780,13 @@ Behaviour:
     point as the final position (the pending target if the engine has not caught up). After
     `finish()` nothing ticks, and undo and accept do nothing.
   - *End guard.* A break guarded by R5 plays, and the recording finishes as any other.
+- **Screen access** (M3-4). `engine` is public so the player screen can put the engine's picture
+  on screen (`VLCPlayerEngine.videoView`); controls never go to it directly. The track properties
+  read the engine at the moment they are asked (tracks appear once the media has opened).
+  `selectAudioTrack` / `selectSubtitleTrack` (nil = subtitles off) reach the engine only while the
+  session is active, like every other control. `skip(by:)` is `skipForward` with a given length:
+  it adds up from the seek base and clamps the same way; the Remote app's buttons send their own
+  interval ("10"), which the screen passes through rather than the settings' step.
 - **Lifetime.** The session owns its tasks. Released without `finish()`, it is freed and its
   snapshot loop is cancelled, but no final save is possible from `deinit`: the player screen
   must call `finish()` when it closes.
@@ -813,6 +826,7 @@ instead.
 | `.unsupportedVersion(v)` | This Version of MythTV Isn't Supported | Your backend is running MythTV *v*, which this version of Mythwatch can't work with. (Blank *v*: "running a version of MythTV, which …".) | no |
 | `.notAuthorized` | Your MythTV Backend Wants a Sign-In | Mythwatch can't sign in to a backend yet, so it can only use one that doesn't ask for a password. | no |
 | any other error (`unexpected`) | Something Went Wrong | Mythwatch ran into a problem it didn't expect. Try again. | yes |
+| the player's engine failed (`playbackFailed`, M3-4) | Can't Play This Recording | Mythwatch couldn't get the video from your MythTV backend. Make sure the backend is turned on, then try again. Mythwatch will pick up where you left off. | yes |
 
 `.malformedResponse` is retryable because a cut-off reply from a busy backend is transient; a
 host that is not a MythTV backend fails the same way again and the detail points at Settings.
@@ -938,6 +952,8 @@ applied after trimming surrounding whitespace and newlines:
     public func makeShowModel(_ show: Show) -> ShowViewModel       // added by M2-5
     public func makeEpisodeDetailModel(_ recording: Recording) -> EpisodeDetailModel   // added by M2-5
     public func makePlaybackSession(_ recording: Recording, start: StartPoint) -> PlaybackSession   // added by M3-2
+    public func finishPlayback(_ session: PlaybackSession) async -> PlaybackOutcome   // added by M3-4; @discardableResult
+    public func retryPlayback(_ failed: PlaybackSession, recording: Recording) async -> PlaybackSession   // added by M3-4
     public func makeSettingsModel() -> SettingsViewModel           // added by M2-6
     public func makeOnboardingModel() -> OnboardingViewModel       // added by M2-6
     public func makeArtwork() -> ArtworkURLs                       // added by M2-7; needs a loaded session
@@ -955,6 +971,12 @@ with fakes. This is the only place concrete types are chosen.
 `makePlaybackSession(_:start:)` needs a loaded session (same precondition as the other
 factories) and builds a `PlaybackSession` from that session's adapter services, a new engine from
 `makeEngine`, `settings.load().playbackSettings` read at that moment, and the model's `now`.
+
+`finishPlayback(_:)` is what the player screen's owner calls when the screen closes: it awaits
+`session.finish()` and only then `reloadAfterPlayback()` on the newest library model (held
+weakly; nothing if there is none), so the refresh sees the final write. `retryPlayback(_:recording:)`
+is Try Again: it awaits `finish()` on the failed session (which keeps the last trusted position)
+and returns a new, unstarted session with `.resume`; it does not reload the library.
 
 `makeEpisodeDetailModel(_:)` wires the model's `onChange` to the newest library model and the
 newest show model made by `makeShowModel(_:)` (both held weakly), so a delete on the episode page
@@ -1109,6 +1131,50 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   load starts) and leaves `isDeleted` false. The caller cannot cancel it. Confirming
   (`askBeforeDelete`) is the view's job; the view closes the page when `isDeleted` becomes true.
 
+**Transport rules** (`TransportModel`, M3-4)
+
+```swift
+@MainActor @Observable public final class TransportModel {
+    public init(session: PlaybackSession, recording: Recording, now: @escaping @MainActor () -> ContinuousClock.Instant)
+    public enum Panel { case info, audio, subtitles }; public enum BackResult { case handled, leave }
+    public static let hideAfter: Duration = .seconds(5)
+    // state: controlsVisible, hideAt, panel, scrubPosition, audioTracks, subtitleTracks,
+    //        selectedAudioTrack, selectedSubtitleTrack; derived: isPlaying, isWaiting, hasEnded,
+    //        failure: UserMessage?, notice: String?, position, duration, progress, elapsedText, remainingText
+    // intents: tick(), showControls(), select(), playPause(), play(), pause(), skipForward(),
+    //          skipBackward(), skip(by:), seek(to:), scrub(by:), commitScrub(), cancelScrub(),
+    //          back() -> BackResult, openPanel(_:), closePanel(), selectAudioTrack(_:),
+    //          selectSubtitleTrack(_:), setBookmark() async
+    public static func timeText(_ d: Duration) -> String
+}
+```
+
+- **No timer.** The screen calls `tick()` when the session's snapshot changes and when `hideAt`
+  arrives. `tick()` notes when playing began and hides the controls once `hideAt` has passed.
+- **Auto-hide** (owner, 2026-11-15: only while playing). `hideAt` is 5 s after the later of the
+  last input and the moment playing began; it is nil (no hiding) while not `.playing` (paused,
+  loading, buffering, failed), while scrubbing, while the panel is open, or when already hidden.
+  Any status other than `.playing` shows the controls again. Every intent counts as input.
+- **Scrubbing** happens only while paused; a swipe while playing only shows the controls.
+  `scrub(by:)` takes full swipes across the touch surface (1 = one, negative = left) and moves a
+  preview from the video's position: one swipe is a fifth of the duration, at least 60 s, or 600 s
+  when the duration is unknown, clamped to `0...duration` (at 0 only without one). Nothing is
+  seeked until `commitScrub()` (does not play); `cancelScrub()` drops the preview. `select()`
+  commits a scrub, else toggles play/pause; `playPause()` commits a scrub and then toggles; a skip
+  or `seek(to:)` cancels a scrub and acts from the video's position; opening the panel cancels it.
+- **Back.** `back()` cancels a scrub, else closes the panel (`.handled`), else returns `.leave`
+  and the screen closes.
+- `play()` / `pause()` act only when they change something (remote commands, not toggles).
+- **Time.** `timeText` is `m:ss` under an hour, else `h:mm:ss`, rounded down. `elapsedText` is the
+  preview while scrubbing, else the video's position; `remainingText` is `-` and the time left,
+  rounded up so the two add up, nil without a duration (known and above zero), as is `progress`.
+- `failure` is `UserMessage.playbackFailed` while the snapshot is `.failed`; `hasEnded` while it is
+  `.ended` (the screen closes; owner, 2026-11-15); `isWaiting` while loading or buffering;
+  `notice` is the session's `problem`.
+- **Panel.** `openPanel(_:)` (default `.info`) and each track selection read the tracks from the
+  session. `setBookmark()` is the session's `setBookmarkHere()` (owner, 2026-11-15: a button in the
+  Info tab); a failure shows in `notice`.
+
 **Address rules** (`SettingsViewModel` and `OnboardingViewModel`)
 
 - **Address text.** The field's text is read with `BackendAddress.parse`. A blank text (only
@@ -1215,7 +1281,7 @@ stock control cannot do the job.
 | Recordings | Vertical scroll: Continue Watching shelf (landscape cards with a part-watched mark; a progress bar needs each recording's position, which the list does not carry), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry; a failed refresh is a banner over the content. Refreshes when the app becomes active. A new `BackendSession.id` gives a new library model and an empty navigation stack. |
 | Show | Fanart header, season picker (several seasons; one named season is a heading; a film's unnamed season draws nothing), episode list (title, S/E, air date, duration, watched or part-watched mark). Context menu: Mark Watched/Unwatched, Delete (confirmed when `askBeforeDelete`). Closes when `isEmpty`. |
 | Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete (confirmed when `askBeforeDelete`). Closes when `isDeleted`. Reached from the shelves and from the show page. |
-| Player | Full-screen video with our transport overlay. See below. |
+| Player | Full-screen video with our transport overlay, presented over the episode page by its start buttons. Binds to `TransportModel` (§6.4). See below. |
 | Settings | Backend (address, detected version, adapter, Test Connection), discovered backends, Playback (skip steps, deinterlace, ask before deleting), Commercials (mode), About (version, licences from the bundled `THIRD_PARTY_NOTICES.md`). Saves on leaving the tab when `canSave` (owner, 2026-11-15); the address hint shows while the text is invalid. Discovery runs while the screen is shown (also on Onboarding). |
 
 Screen wording that is not a `UserMessage`, an `addressHint` or a `StartOption.title` lives in one
@@ -1246,6 +1312,21 @@ backend saved in the app's settings, and only moves focus, opens pages and goes 
 | Select while the "Skipped commercials" banner is focused | Undo |
 | Select while the Skip button is shown (prompt mode) | Skip |
 
+**Player screen** (M3-4, `Player/PlayerScreen.swift`). It makes its session on appear and starts it.
+However it closes (Menu, the end of the recording, Close on the failure), it hands the session to
+the episode page, which calls `AppModel.finishPlayback` and then reloads its own start points;
+`onDisappear` also leaves, so a session is never released unfinished. Try Again on the failure
+calls `retryPlayback` and starts the new session. Remote input comes through
+`Player/RemoteInputView.swift`, a focusable UIKit view (SwiftUI cannot tell a touch-surface swipe
+from a click or measure one): presses map to `select`, `playPause`, skips and `back`; a horizontal
+swipe to `scrub(by:)` in fractions of the view's width; a downward swipe opens the panel. It is
+on screen only while the panel is closed, so focus moves into the panel (a segmented Info /
+Audio / Subtitles picker; Menu closes it). `Player/NowPlaying.swift` publishes the title,
+duration, elapsed time and rate to `MPNowPlayingInfoCenter` (again on a status change or a jump
+of 2 s or more) and maps `MPRemoteCommandCenter`'s play, pause, toggle, skip (by the command's
+own interval) and change-position commands to the model. Checked on the owner's Apple TV against
+basement (2026-11-15): one Play/Pause press acts once.
+
 The transport bar shows elapsed and remaining time, a scrubber with commercial breaks drawn as
 marked segments, and the title. It hides after 5 s of no input. Publish Now Playing info and
 handle remote commands through `MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`.
@@ -1264,6 +1345,12 @@ section 5 and the findings in `docs/VLCKIT.md`, in particular:
   The app passes the setting to the engine's initialiser (one engine per playback), so
   `PlayerEngine` has no call for it. `yadif` and `yadif2x` drop frames on Apple TV HD.
 - Track lists leave out VLC's "Disable" entry (id -1); `selectedSubtitleTrack = nil` sets -1.
+- Caption size (M3-4). VLC draws CEA-608 captions about 5 % of the picture high, far too large
+  on a TV. They are drawn in grid mode, where VLC pins `sub-text-scale` at 100, so the engines
+  share one `VLCLibrary` made with `--freetype-rel-fontsize` (VLC reads it as a text height of
+  100 / value percent, overriding the caption's own size): 2.5 % of the height at the system's
+  default caption size (owner, 2026-11-15), times `MACaptionAppearanceGetRelativeCharacterSize`
+  from Settings › Accessibility › Subtitles and Captioning, read when the first engine is made.
 
 **VLCKit linking (licence requirement).** VLCKit/libVLC is LGPL. It must be linked
 **dynamically**: a separate `.framework` embedded in the app bundle ("Embed & Sign"), never

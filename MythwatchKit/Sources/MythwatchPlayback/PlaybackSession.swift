@@ -73,7 +73,9 @@ enum SessionLabels {
 
     @ObservationIgnored private let recording: Recording
     @ObservationIgnored private let startPoint: StartPoint
-    @ObservationIgnored private let engine: any PlayerEngine
+    /// The engine, for the player screen to put its picture on screen (SPEC 5.2 "Screen access").
+    /// Controls go through the session, never to the engine directly.
+    @ObservationIgnored public let engine: any PlayerEngine
     @ObservationIgnored private let state: any PlaybackStateService
     @ObservationIgnored private let markup: any MarkupService
     @ObservationIgnored private let recordings: any RecordingsService
@@ -386,6 +388,10 @@ enum SessionLabels {
 
     public func skipBackward() { userSeek(to: seekBase - settings.skipBackward) }
 
+    /// A skip of a given length (negative = back), for a remote command that names its own
+    /// interval. Adds up and clamps like `skipForward` / `skipBackward`.
+    public func skip(by offset: Duration) { userSeek(to: seekBase + offset) }
+
     /// A scrub the viewer committed.
     public func seek(to position: Duration) { userSeek(to: position) }
 
@@ -453,6 +459,28 @@ enum SessionLabels {
         } catch {
             report(.bookmark, SessionLabels.bookmarkNotSet)
         }
+    }
+
+    // MARK: Tracks
+
+    /// The engine's audio tracks, read now (they appear once the media has opened).
+    public var audioTracks: [MediaTrack] { engine.audioTracks }
+    /// The engine's subtitle tracks, read now.
+    public var subtitleTracks: [MediaTrack] { engine.subtitleTracks }
+    public var selectedAudioTrack: MediaTrack.ID? { engine.selectedAudioTrack }
+    /// nil = subtitles off.
+    public var selectedSubtitleTrack: MediaTrack.ID? { engine.selectedSubtitleTrack }
+
+    /// Does nothing unless the session is active (the engine is loaded and `finish()` not called).
+    public func selectAudioTrack(_ id: MediaTrack.ID?) {
+        guard phase == .active else { return }
+        engine.selectedAudioTrack = id
+    }
+
+    /// nil turns subtitles off. Does nothing unless the session is active.
+    public func selectSubtitleTrack(_ id: MediaTrack.ID?) {
+        guard phase == .active else { return }
+        engine.selectedSubtitleTrack = id
     }
 
     // MARK: Finish

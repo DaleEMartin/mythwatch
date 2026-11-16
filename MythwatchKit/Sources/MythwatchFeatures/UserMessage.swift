@@ -104,6 +104,14 @@ extension UserMessage {
         }
     }
 
+    /// The player lost the video, or never got it (SPEC 7 "Player"). The engine's own reason is
+    /// never shown. Try Again starts a new viewing from where this one stopped.
+    public static let playbackFailed = UserMessage(
+        title: "Can't Play This Recording",
+        detail: "Mythwatch couldn't get the video from your MythTV backend. Make sure the backend is "
+            + "turned on, then try again. Mythwatch will pick up where you left off.",
+        canRetry: true)
+
     /// For a failure that is not a `BackendError` (which should not happen). Never shows the
     /// failure's own description.
     public static let unexpected = UserMessage(

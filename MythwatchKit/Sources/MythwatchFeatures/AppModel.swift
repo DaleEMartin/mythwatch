@@ -173,6 +173,24 @@ public struct BackendSession: Sendable, Identifiable {
             settings: settings.load().playbackSettings, now: now)
     }
 
+    /// Ends a viewing when the player screen closes: `finish()` (which writes the final state),
+    /// then, once that has landed, `reloadAfterPlayback()` on the newest library model, if it is
+    /// still alive. Returns the session's outcome.
+    @discardableResult
+    public func finishPlayback(_ session: PlaybackSession) async -> PlaybackOutcome {
+        let outcome = await session.finish()
+        await libraryModel?.reloadAfterPlayback()
+        return outcome
+    }
+
+    /// Try Again after a failure: finishes `failed` (so its last position is written first), then
+    /// makes a new, unstarted session that resumes `recording` from there. The library is not
+    /// reloaded; the viewer is still in the player. Needs a loaded session.
+    public func retryPlayback(_ failed: PlaybackSession, recording: Recording) async -> PlaybackSession {
+        _ = await failed.finish()
+        return makePlaybackSession(recording, start: .resume)
+    }
+
     /// The Settings screen's model. Needs no session: the screen is reachable while the backend
     /// is down. Saving a changed backend makes this `AppModel` connect again.
     public func makeSettingsModel() -> SettingsViewModel {

@@ -6,6 +6,7 @@ import TVVLCKit
 import MobileVLCKit
 #endif
 import Foundation
+import MediaAccessibility
 import MythwatchPlayback
 import UIKit
 
@@ -22,7 +23,28 @@ final class VLCPlayerEngine: NSObject, PlayerEngine {
     let snapshots: AsyncStream<PlayerSnapshot>
     var snapshot: PlayerSnapshot { machine.snapshot }
 
-    private let player = VLCMediaPlayer()
+    /// Caption text height, as a percentage of the picture's height, at the tvOS default caption
+    /// size. VLC draws CEA-608 captions at about 5 %, which the owner found far too large (M3-3,
+    /// M3-4). `sub-text-scale` does not work for them: VLC renders 608 in grid mode and pins the
+    /// scale there at 100. A forced `freetype-rel-fontsize` overrides the caption's own size in
+    /// every mode; VLC reads it as "text height = 100 / value percent".
+    static let captionHeightPercent = 2.5
+
+    /// `freetype-rel-fontsize` for the viewer's caption size in the system's Subtitles and
+    /// Captioning settings (`relativeSize` 1 = the system default; larger = bigger text). Read once,
+    /// when the first engine is made; a change there applies the next time the app starts.
+    static func captionRelativeFontSize(relativeSize: Double) -> Int {
+        let percent = captionHeightPercent * max(0.25, relativeSize)
+        return min(100, max(6, Int((100 / percent).rounded())))
+    }
+
+    /// One libVLC for every engine, carrying the caption size. `VLCMediaPlayer(options:)` would
+    /// make a new libVLC for each playback instead.
+    private static let library = VLCLibrary(options: [
+        "--freetype-rel-fontsize=\(captionRelativeFontSize(relativeSize: Double(MACaptionAppearanceGetRelativeCharacterSize(.user, nil))))",
+    ])
+
+    private let player = VLCMediaPlayer(library: VLCPlayerEngine.library)
     private let deinterlace: Bool
     private let sizeSession: URLSession
     private let continuation: AsyncStream<PlayerSnapshot>.Continuation

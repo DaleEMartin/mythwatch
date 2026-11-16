@@ -281,3 +281,18 @@ Sessions*) and 3757 (*Counter Offers*, being recorded at the time). GET requests
 
 On the simulator, `basement.local` does not resolve (VLC stays in Opening with no further
 event); the bare name works there. On the Apple TV it is the other way round (§8).
+
+## 14. Caption size (M3-4)
+
+Checked 2026-11-15 on the Apple TV HD with *Counter Offers* (CEA-608 captions), owner judging by eye.
+
+| Option | Result |
+| --- | --- |
+| `--sub-text-scale=70`, then `=40` (shared `VLCLibrary`) | no change at all |
+| `--freetype-rel-fontsize=31` (text about 3.2 % of the picture height) | clearly smaller; owner: still too big |
+| `--freetype-rel-fontsize=40` (about 2.5 %) | owner: good |
+
+Why: VLC 3's 608 decoder (`modules/codec/cc.c`, read for behaviour only) sets a relative size of
+about 5 % of the height from its 15-row grid and declares no size option; the freetype renderer
+fixes the text scale at 100 for grid-mode text, but merges a forced `freetype-rel-fontsize` over
+every segment's own size. The engine scales the 2.5 % by the system caption size (SPEC §7).

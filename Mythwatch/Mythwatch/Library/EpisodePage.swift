@@ -1,5 +1,6 @@
 import MythwatchDomain
 import MythwatchFeatures
+import MythwatchPlayback
 import SwiftUI
 
 /// SPEC 7 "Episode detail". Makes its model once, when first shown.
@@ -8,19 +9,41 @@ struct EpisodePage: View {
     let recording: Recording
     let close: () -> Void
     @State private var model: EpisodeDetailModel?
+    @State private var playing: PlayRequest?
 
     var body: some View {
         Group {
             if let model {
                 EpisodeDetailView(
                     model: model, artwork: app.makeArtwork(),
-                    askBeforeDelete: { app.savedSettings.askBeforeDelete }, close: close)
+                    askBeforeDelete: { app.savedSettings.askBeforeDelete }, close: close,
+                    play: { playing = PlayRequest(start: $0) })
             } else {
                 Color.clear  // something must be on screen for onAppear to run
             }
         }
         .onAppear { if model == nil { model = app.makeEpisodeDetailModel(recording) } }
+        .fullScreenCover(item: $playing) { request in
+            PlayerScreen(app: app, recording: recording, start: request.start, close: finished)
+        }
     }
+
+    /// The player closed: write the final state and refresh the library, then this page's start
+    /// points (SPEC 7 "Player"; `AppModel.finishPlayback`).
+    private func finished(_ session: PlaybackSession) {
+        playing = nil
+        let model = self.model
+        Task {
+            await app.finishPlayback(session)
+            await model?.load()
+        }
+    }
+}
+
+/// One press of a start button: a fresh identity, so the same start point can be chosen again.
+struct PlayRequest: Identifiable {
+    let id = UUID()
+    let start: StartPoint
 }
 
 struct EpisodeDetailView: View {
@@ -28,6 +51,7 @@ struct EpisodeDetailView: View {
     let artwork: ArtworkURLs
     let askBeforeDelete: () -> Bool
     let close: () -> Void
+    let play: (StartPoint) -> Void
 
     @State private var confirmingDelete = false
 
@@ -72,8 +96,7 @@ struct EpisodeDetailView: View {
     private var buttons: some View {
         HStack(spacing: 30) {
             ForEach(model.startOptions) { option in
-                // Playback arrives with the player screen (M3-4).
-                Button(option.title) {}
+                Button(option.title) { play(option.point) }
                     .accessibilityIdentifier("detail.start.\(option.id)")
             }
             if model.isLoading { ProgressView() }

@@ -153,6 +153,23 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   it, so the player screen needs a way to reach the view (for example make the engine in the
   screen and pass it through, or a small app-side protocol); captions draw large (VLC's default).
   Open: the owner did not hear Spanish on 3753's second audio track.
+- **M3-4 done and committed** (2026-11-15, direct Opus session with the owner): the player screen.
+  `TransportModel` in `MythwatchFeatures` (auto-hide only while playing, scrub preview / commit /
+  cancel, Back layering, time text, panel and tracks, failure as `UserMessage.playbackFailed`);
+  `PlaybackSession` gained public `engine` (for the picture only), track pass-throughs and
+  `skip(by:)`; `AppModel.finishPlayback` (finish, then `reloadAfterPlayback`) and `retryPlayback`
+  (finish, then a new `.resume` session). App: `Player/PlayerScreen.swift`, `RemoteInputView.swift`
+  (UIKit presses and touch-surface pans), `NowPlaying.swift`; the episode page's start buttons open
+  it. Owner decisions: hide controls only while playing; close the player at the end; Set Bookmark in
+  the Info tab; captions smaller. Checked on the Apple TV against basement (GET only; every write
+  is still a stub, so the player shows "Couldn't save your place."): play, pause, skips, scrub, panel,
+  tracks, captions, Menu, Remote app ±10, no double toggle. **Captions:** `sub-text-scale` does
+  nothing for CEA-608 (grid mode); `freetype-rel-fontsize` works, set to 2.5 % of the height times
+  the tvOS caption size (`docs/VLCKIT.md` §14). For M4-3: the transport bar has no break segments
+  and no banner yet; `TransportModel` is where banner-expiry logic belongs (it has the clock and
+  `tick()`). For later: the show page underneath is not refreshed after playback (the library and
+  episode page are); the swipe-down panel and scrubbing cannot be driven by XCUIRemote, so they were
+  checked by hand only.
 - **Every task that can run without the owner is done.** Remaining, all needing the owner:
   M3-4, M3-5 (nominated recording), M4-3, and Milestone 5. Offer each as a direct Opus
   session; do not launch them unattended.

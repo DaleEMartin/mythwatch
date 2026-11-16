@@ -50,7 +50,7 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 | ~~M0-3~~ | Done 2026-11-15: go. See `docs/VLCKIT.md`. | |
 | ~~M2-7~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
 | ~~M3-3~~ | Done 2026-11-15. See `docs/VLCKIT.md` §13. | |
-| **M3-4** | Player screen | M3-3 |
+| ~~M3-4~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
 | **M3-5** | Write path in the v35 adapter | **A recording the owner nominates** |
 | **M4-3** | Commercial UI | M3-4 |
 | **M5-1** | Delete | **A recording the owner nominates** |

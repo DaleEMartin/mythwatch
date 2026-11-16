@@ -5,6 +5,8 @@ import SwiftUI
 struct MessageView: View {
     let message: UserMessage
     var retry: (() async -> Void)?
+    /// Adds a Close button (the player's failure screen).
+    var close: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 30) {
@@ -16,6 +18,10 @@ struct MessageView: View {
             if message.canRetry, let retry {
                 Button(Labels.tryAgain) { Task { await retry() } }
                     .accessibilityIdentifier("message.retry")
+            }
+            if let close {
+                Button(Labels.close, action: close)
+                    .accessibilityIdentifier("message.close")
             }
         }
         .padding(60)

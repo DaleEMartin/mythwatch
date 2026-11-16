@@ -50,12 +50,12 @@ struct UserMessageTests {
     }
 
     @Test func titlesAreDistinct() {
-        let titles = samples.map { UserMessage($0).title } + [UserMessage.unexpected.title]
+        let titles = samples.map { UserMessage($0).title } + [UserMessage.unexpected.title, UserMessage.playbackFailed.title]
         #expect(Set(titles).count == titles.count)
     }
 
     @Test func detailsAreDistinct() {
-        let details = samples.map { UserMessage($0).detail } + [UserMessage.unexpected.detail]
+        let details = samples.map { UserMessage($0).detail } + [UserMessage.unexpected.detail, UserMessage.playbackFailed.detail]
         #expect(Set(details).count == details.count)
     }
 
@@ -66,6 +66,17 @@ struct UserMessageTests {
             for word in forbidden {
                 #expect(!text.localizedCaseInsensitiveContains(word), "\"\(word)\" in: \(text)")
             }
+        }
+    }
+
+    @Test func playbackFailedReadsPlainlyAndOffersARetry() {
+        let message = UserMessage.playbackFailed
+        #expect(message.title == "Can't Play This Recording")
+        #expect(message.detail == "Mythwatch couldn't get the video from your MythTV backend. Make sure the "
+            + "backend is turned on, then try again. Mythwatch will pick up where you left off.")
+        #expect(message.canRetry)
+        for text in [message.title, message.detail] {
+            for word in forbidden { #expect(!text.localizedCaseInsensitiveContains(word), "\"\(word)\" in: \(text)") }
         }
     }
 

@@ -45,6 +45,23 @@ enum Labels {
     static let watched = "Watched"
     static let partWatched = "Part watched"
 
+    // Player
+    static let close = "Close"
+    static let info = "Info"
+    static func panelTab(_ tab: TransportModel.Panel) -> String {
+        switch tab {
+        case .info: "Info"
+        case .audio: "Audio"
+        case .subtitles: "Subtitles"
+        }
+    }
+    static let setBookmark = "Set Bookmark Here"
+    static let subtitlesOff = "Off"
+    static let noAudioTracks = "No audio tracks are available."
+    static let noSubtitles = "This recording has no subtitles or captions."
+    /// "English", or VLC's name ("Track 1") when it gives no language.
+    static func trackName(_ track: MediaTrack) -> String { track.language ?? track.name }
+
     // Settings
     static let backend = "Backend"
     static let address = "Address"
