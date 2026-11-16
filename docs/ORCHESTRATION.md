@@ -153,7 +153,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   task that adds a framework import to the package, run the iOS build check in SPEC §11.
 - Confirmed by the owner 2026-11-14: bundle-id prefix `com.daleemartin` (the "e" is a middle
   initial); the `NSLocalNetworkUsageDescription` wording in `Mythwatch/Info.plist`.
-- Nothing has been pushed anywhere. No GitHub repo exists; create one only when the owner asks.
+- **GitHub** (owner, 2026-11-15): private repo `DaleEMartin/mythwatch`, remote `origin` over HTTPS
+  (gh's login; this Mac has no SSH key for GitHub). Push `main` after each committed task. Do not
+  push the `m0-3-vlckit-spike` branch, and do not make the repo public without the owner (the
+  fixtures hold real programme and channel data).
 ## Owner decisions of 2026-11-15 (approved; apply after M3-2, one at a time)
 
 1. **Fixtures: leave as captured.** The owner first approved replacing the channel call signs,

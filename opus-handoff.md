@@ -33,13 +33,13 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 
 ## Where the project stands
 
-- Everything is committed on `main`, locally. **Nothing has been pushed and no GitHub repo
-  exists; do not push or create one unless the owner asks.**
+- Everything is committed on `main` and pushed to the private GitHub repo `DaleEMartin/mythwatch`
+  (`origin`, HTTPS). Push `main` after each committed task; never make the repo public without the owner.
 - `MythwatchKit` (the Swift package) holds all the logic and is done up to the UI and the real
   player engine: domain, backend seam, v35 read path, settings, library builder, every view
   model, the playback session, and the commercial skipper wired into it. 868 tests, under 2 s.
-- `Mythwatch/` (the tvOS app) is still the placeholder shell from M0-2: one `Text("Mythwatch")`
-  view and one UI launch test. It links `MythwatchFeatures` and `MythBackendV35`. No VLCKit yet.
+- `Mythwatch/` (the tvOS app) has the library and settings screens (M2-7), UI tests on the fakes
+  (`-MythwatchFakes`, Debug only), and embeds TVVLCKit, unused until M3-3. No player yet.
 - Every write method in the v35 adapter is a stub that sends nothing and throws `.rejected`.
   No code in the repo can POST to a backend until M3-5.
 
@@ -226,4 +226,4 @@ Older decisions (name, architecture, VLCKit, licence, tvOS 26) are in `docs/ORCH
 3. Add a "done and committed" entry for the task to the Status section of
    `docs/ORCHESTRATION.md`, with anything the next task needs to know.
 4. Commit once the owner accepts: one commit per task, message starting with the task id.
-   **Do not push.**
+   Then push `main` to `origin`.
