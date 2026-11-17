@@ -12,6 +12,8 @@ struct RemoteInput {
     /// A horizontal swipe on the touch surface, in full swipes (1 = across the whole surface).
     var swipe: (Double) -> Void = { _ in }
     var swipeDown: () -> Void = {}
+    /// A finger on the touch surface (a tap, or the start of a swipe), without a click.
+    var touch: () -> Void = {}
 }
 
 /// A full-screen, focusable UIKit view that receives the remote's presses and touch-surface
@@ -38,8 +40,11 @@ final class RemoteInputUIView: UIView {
     private enum SwipeKind { case undecided, horizontal, down, ignored }
     private var swipeKind = SwipeKind.undecided
     private var lastX: CGFloat = 0
-    /// Movement before a swipe is read as horizontal or down.
+    /// Sideways movement before a swipe is read as a scrub.
     private let decideDistance: CGFloat = 40
+    /// A swipe down opens the panel only once it has gone this share of the surface's height,
+    /// mostly straight down, so a resting finger or a drift does not open it (owner, 2026-11-16).
+    private let downShare: CGFloat = 0.3
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -85,6 +90,14 @@ final class RemoteInputUIView: UIView {
         if !others.isEmpty { super.pressesCancelled(others, with: event) }
     }
 
+    // MARK: Touches
+
+    /// Any touch on the touch surface, before it is known to be a swipe or a click.
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if touches.contains(where: { $0.type == .indirect }) { input.touch() }
+        super.touchesBegan(touches, with: event)
+    }
+
     // MARK: Swipes
 
     @objc private func panned(_ pan: UIPanGestureRecognizer) {
@@ -94,14 +107,14 @@ final class RemoteInputUIView: UIView {
             swipeKind = .undecided
             lastX = 0
         case .changed:
-            if swipeKind == .undecided, max(abs(t.x), abs(t.y)) >= decideDistance {
-                if abs(t.x) >= abs(t.y) {
-                    swipeKind = .horizontal
-                    lastX = 0  // count the deciding movement too
-                } else if t.y > 0 {
+            if swipeKind == .undecided {
+                if t.y >= bounds.height * downShare, t.y > 2 * abs(t.x) {
                     swipeKind = .down
                     input.swipeDown()
-                } else {
+                } else if abs(t.x) >= decideDistance, abs(t.x) >= abs(t.y) {
+                    swipeKind = .horizontal
+                    lastX = 0  // count the deciding movement too
+                } else if -t.y >= decideDistance, -t.y > abs(t.x) {
                     swipeKind = .ignored
                 }
             }

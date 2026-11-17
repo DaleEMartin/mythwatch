@@ -194,6 +194,14 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   snapshots land in one frame, so a missed `.playing` left the controls up for good; it now uses an
   `Observations` loop. Not checked on the Apple TV: the banner with real breaks on basement, and
   prompt mode on screen (prompt mode is covered by model tests only).
+- **M4-3 follow-up done and committed** (2026-11-16, owner on the Apple TV): player input.
+  A touch on the pad shows the transport bar; the panel opens only on a deliberate swipe down
+  (a third of the surface, mostly vertical) and closes on a swipe up that starts on its tabs (a pan
+  recognizer on the window while the panel is open; a focus-strip attempt closed it on every
+  swipe and was dropped); the tabs row and the content under it are full-width focus sections so
+  Set Bookmark Here (far right) is reachable both ways. `TransportModel.status` is now copied by
+  `tick()`, so position updates no longer redraw the whole player (that made panel focus hard to
+  move while playing). Checked by the owner on the Apple TV: works.
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its

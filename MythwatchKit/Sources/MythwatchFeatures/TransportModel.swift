@@ -64,18 +64,23 @@ import Observation
         self.recording = recording
         self.now = now
         lastInput = now()
+        status = session.snapshot.status
     }
 
     // MARK: State for the screen
 
-    public var isPlaying: Bool { session.snapshot.status == .playing }
+    /// The session's status as of the last `tick()`. Kept here, not read from the snapshot, so
+    /// that the screen around the panel is not redrawn on every position update while playing.
+    public private(set) var status: PlayerStatus
+
+    public var isPlaying: Bool { status == .playing }
     /// Loading or buffering: the screen shows a spinner.
-    public var isWaiting: Bool { [.loading, .buffering].contains(session.snapshot.status) }
+    public var isWaiting: Bool { [.loading, .buffering].contains(status) }
     /// The recording played to its end; the screen closes.
-    public var hasEnded: Bool { session.snapshot.status == .ended }
+    public var hasEnded: Bool { status == .ended }
     /// What to show when the engine failed, with Try Again and Close.
     public var failure: UserMessage? {
-        if case .failed = session.snapshot.status { return .playbackFailed }
+        if case .failed = status { return .playbackFailed }
         return nil
     }
     /// The session's newest non-fatal problem, already plain words.
@@ -149,6 +154,7 @@ import Observation
     /// Notes whether the session is playing, and hides the controls once `hideAt` has passed.
     /// Call it when the session's snapshot changes and when `hideAt` arrives.
     public func tick() {
+        if status != session.snapshot.status { status = session.snapshot.status }
         if case .skipped(_, let undoUntil) = session.banner, now() >= undoUntil, expiredUndoUntil != undoUntil {
             expiredUndoUntil = undoUntil
         }

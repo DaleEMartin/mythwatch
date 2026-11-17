@@ -1138,7 +1138,7 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
     public init(session: PlaybackSession, recording: Recording, now: @escaping @MainActor () -> ContinuousClock.Instant)
     public enum Panel { case info, audio, subtitles }; public enum BackResult { case handled, leave }
     public static let hideAfter: Duration = .seconds(5)
-    // state: controlsVisible, hideAt, panel, scrubPosition, audioTracks, subtitleTracks,
+    // state: status (as of the last tick), controlsVisible, hideAt, panel, scrubPosition, audioTracks, subtitleTracks,
     //        selectedAudioTrack, selectedSubtitleTrack; derived: isPlaying, isWaiting, hasEnded,
     //        failure: UserMessage?, notice: String?, position, duration, progress, elapsedText, remainingText
     // M4-3: public enum CommercialBanner { case skipped(Duration), offer }
@@ -1153,6 +1153,11 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
 
 - **No timer.** The screen calls `tick()` when the session's snapshot changes and when `hideAt`
   arrives. `tick()` notes when playing began and hides the controls once `hideAt` has passed.
+- **Status as of the last tick** (owner, 2026-11-16). `status` is copied from the snapshot by
+  `tick()`, and `isPlaying`, `isWaiting`, `hasEnded` and `failure` read it, so a position update
+  notifies only readers of the position (`position`, the time texts, `progress`). Reading the
+  snapshot directly redrew the whole player about four times a second while playing, which made
+  focus in the panel hard to move.
 - **Auto-hide** (owner, 2026-11-15: only while playing). `hideAt` is 5 s after the later of the
   last input and the moment playing began; it is nil (no hiding) while not `.playing` (paused,
   loading, buffering, failed), while scrubbing, while the panel is open, or when already hidden.
@@ -1320,9 +1325,11 @@ backend saved in the app's settings, and only moves focus, opens pages and goes 
 | Input | Action |
 | --- | --- |
 | Play/Pause, or click centre | Toggle play/pause; shows the transport bar |
+| Touch the touch surface (no click) | Shows the transport bar (owner, 2026-11-16) |
 | Click left / right | Skip back / forward by the configured step |
 | Swipe on the touch surface while paused | Scrub; click to commit, Menu to cancel |
-| Swipe down | Panel with Info, Audio, Subtitles tabs |
+| Swipe down (a third of the surface, mostly vertical) | Panel with Info, Audio, Subtitles tabs |
+| Swipe up (a quarter of the surface, mostly vertical) starting while the panel's tabs are focused | Close the panel; read from the touch surface by a pan recognizer on the window while the panel is open (owner, 2026-11-16) |
 | Menu / Back | Close panel, else leave the player (calls `finish()`) |
 | Select while the "Skipped commercials" banner shows | Undo (Go Back) |
 | Select while the Skip button is shown (prompt mode) | Skip |

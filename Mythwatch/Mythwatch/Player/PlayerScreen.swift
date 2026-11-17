@@ -131,7 +131,8 @@ private struct PlayerContent: View {
             right: { transport.skipForward() },
             menu: { if transport.back() == .leave { leave() } },
             swipe: { transport.scrub(by: $0) },
-            swipeDown: { transport.openPanel() })
+            swipeDown: { transport.openPanel() },
+            touch: { transport.showControls() })
     }
 }
 
@@ -247,6 +248,8 @@ private struct Scrubber: View {
 private struct PlayerPanel: View {
     let transport: TransportModel
 
+    @FocusState private var tabsFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 30) {
             Picker(Labels.info, selection: Binding(get: { transport.panel ?? .info }, set: { transport.openPanel($0) })) {
@@ -254,20 +257,33 @@ private struct PlayerPanel: View {
             }
             .pickerStyle(.segmented)
             .fixedSize()
+            .focused($tabsFocused)
             .accessibilityIdentifier("player.panel.tabs")
-            switch transport.panel ?? .info {
-            case .info: info
-            case .audio: audio
-            case .subtitles: subtitles
+            // Full width too, so a swipe up from a button at the far right reaches the tabs.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .focusSection()
+            // A focus section across the panel's width, so a swipe down from the tabs reaches a
+            // button anywhere in it (Set Bookmark Here sits at the far right), and back up.
+            Group {
+                switch transport.panel ?? .info {
+                case .info: info
+                case .audio: audio
+                case .subtitles: subtitles
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .focusSection()
         }
         .padding(50)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // The panel opens with the tabs focused, not the first button.
+        .defaultFocus($tabsFocused, true)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 80)
         .padding(.top, 50)
         .focusSection()
         .onExitCommand { transport.closePanel() }
+        .background(SwipeUpCatcher(armed: tabsFocused, swipedUp: { transport.closePanel() }))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
     }
@@ -353,4 +369,77 @@ private struct VideoSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UIView, context: Context) {}
+}
+
+/// Closes the panel on a swipe up that starts while the tabs are focused, as in Apple's TV app.
+/// Focus alone cannot do it: nothing is above the tabs, so a swipe up there moves nothing and
+/// SwiftUI reports nothing. This watches the touch surface itself, through a pan recognizer on
+/// the window (indirect touches reach the window whatever is focused). It only watches; it never
+/// takes touches from the focus engine. It exists only while the panel is open.
+private struct SwipeUpCatcher: UIViewRepresentable {
+    let armed: Bool
+    let swipedUp: () -> Void
+
+    func makeUIView(context: Context) -> SwipeUpCatcherView {
+        let view = SwipeUpCatcherView()
+        view.isUserInteractionEnabled = false
+        updateUIView(view, context: context)
+        return view
+    }
+
+    func updateUIView(_ view: SwipeUpCatcherView, context: Context) {
+        view.armedNow = armed
+        view.swipedUp = swipedUp
+    }
+
+    static func dismantleUIView(_ view: SwipeUpCatcherView, coordinator: ()) { view.detach() }
+}
+
+final class SwipeUpCatcherView: UIView, UIGestureRecognizerDelegate {
+    /// Whether the tabs are focused now; read when a swipe starts.
+    var armedNow = false
+    var swipedUp: () -> Void = {}
+    /// The swipe must go this share of the surface's height, mostly straight up.
+    private let upShare: CGFloat = 0.25
+    private var armed = false
+    private var fired = false
+
+    private lazy var pan: UIPanGestureRecognizer = {
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+        pan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue)]
+        pan.cancelsTouchesInView = false
+        pan.delaysTouchesBegan = false
+        pan.delaysTouchesEnded = false
+        pan.delegate = self
+        return pan
+    }()
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if let window { window.addGestureRecognizer(pan) } else { detach() }
+    }
+
+    func detach() { pan.view?.removeGestureRecognizer(pan) }
+
+    @objc private func panned(_ pan: UIPanGestureRecognizer) {
+        switch pan.state {
+        case .began:
+            armed = armedNow
+            fired = false
+        case .changed:
+            guard armed, !fired, let surface = pan.view else { return }
+            let t = pan.translation(in: surface)
+            if -t.y >= surface.bounds.height * upShare, -t.y > 2 * abs(t.x) {
+                fired = true
+                swipedUp()
+            }
+        default:
+            armed = false
+        }
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool { true }
 }

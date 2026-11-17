@@ -4,7 +4,15 @@ import MythwatchDomain
 import MythwatchFeatures
 import MythwatchPlayback
 import MythwatchTestSupport
+import Synchronization
 import Testing
+
+/// Set from an observation's `onChange`, which may run on any thread.
+private final class ChangeFlag: Sendable {
+    private let state = Mutex(false)
+    func set() { state.withLock { $0 = true } }
+    var value: Bool { state.withLock { $0 } }
+}
 
 /// A `TransportModel` over a real `PlaybackSession` on the fakes. Time moves only through
 /// `clock`; the engine only through the fake's emitters, each followed by `waitUntilDelivered()`.
@@ -344,6 +352,7 @@ struct TransportModelTests {
         #expect(rig.model.failure == nil)
         rig.engine.emitFailed("VLC error")
         await rig.engine.waitUntilDelivered()
+        rig.model.tick()  // as the screen does on every snapshot change
         #expect(rig.model.failure == .playbackFailed)
         #expect(rig.model.failure?.detail.contains("VLC") == false)
     }
@@ -359,6 +368,7 @@ struct TransportModelTests {
             withObservationTracking { _ = session.snapshot } onChange: { done.resume() }
             rig.engine.emitEnded()
         }
+        rig.model.tick()  // as the screen does on every snapshot change
         #expect(rig.model.hasEnded)
         #expect(await rig.session.finish().reachedEnd)
     }
@@ -414,5 +424,41 @@ struct TransportModelTests {
         rig.state.failNext(.rejected("DIAG"), on: .setBookmark)
         await rig.model.setBookmark()
         #expect(rig.model.notice == "Couldn't set the bookmark.")
+    }
+
+    /// The screen redraws on every change it observes. While playing, the position changes about
+    /// four times a second; what the screen around the panel reads must not change with it, or
+    /// the player and its panel redraw all the time and focus in the panel is hard to move
+    /// (owner, 2026-11-16). Only the time texts and progress may follow the position.
+    @Test func positionUpdatesWhilePlayingNotifyOnlyTheTimeReaders() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(10))
+        rig.model.openPanel(.info)
+        let changed = ChangeFlag()
+        withObservationTracking {
+            _ = rig.model.isPlaying
+            _ = rig.model.isWaiting
+            _ = rig.model.hasEnded
+            _ = rig.model.failure
+            _ = rig.model.controlsVisible
+            _ = rig.model.hideAt
+            _ = rig.model.panel
+            _ = rig.model.commercialBanner
+            _ = rig.model.bannerHidesAt
+        } onChange: { changed.set() }
+        await rig.emit(.playing, at: .milliseconds(10_250))
+        await rig.emit(.playing, at: .milliseconds(10_500))
+        rig.advance(.seconds(1))
+        #expect(!changed.value)
+    }
+
+    @Test func aStatusChangeStillNotifies() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(10))
+        let changed = ChangeFlag()
+        withObservationTracking { _ = rig.model.isPlaying } onChange: { changed.set() }
+        await rig.emit(.paused, at: .seconds(11))
+        #expect(changed.value)
+        #expect(!rig.model.isPlaying)
     }
 }
