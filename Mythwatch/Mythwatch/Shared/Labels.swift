@@ -170,7 +170,15 @@ enum Labels {
         return text
     }
 
+    /// "S25 E32 · First aired Nov 2, 2026 · 1 hr 2 min". Without an air date (the listings often
+    /// have none for a first run) the recording day stands in: "Recorded Nov 10, 2026" (owner, 2026-11-16).
     static func detailLine(_ r: Recording) -> String {
-        [seasonEpisode(r), r.originalAirDate.flatMap(aired), length(r)].compactMap { $0 }.joined(separator: " · ")
+        let date = r.originalAirDate.flatMap(aired) ?? recordedDay(r)
+        return [seasonEpisode(r), date, length(r)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "Recorded Nov 10, 2026", in the device's time zone.
+    static func recordedDay(_ r: Recording) -> String {
+        "Recorded " + r.recordingStart.formatted(date: .abbreviated, time: .omitted)
     }
 }
