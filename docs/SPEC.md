@@ -24,8 +24,8 @@ requires it; when it does, update this file in the same commit.
 - Settings: backend address, connection test, playback and commercial-skip options.
 
 **Designed for, not built yet:** more backend versions, Live TV, the Videos library, backend
-login, Bonjour discovery of backends (built in the last milestone), an AVPlayer engine, an
-iPhone app (section 11).
+login, an AVPlayer engine, an iPhone app (section 11). Bonjour discovery of backends was built
+in the last milestone (M5-2, SPEC 6.3).
 
 **Fixed decisions:** Swift 6 language mode with strict concurrency; SwiftUI; tvOS 26 deployment
 target; macOS 15 for package tests; iOS 26 declared in the package so it stays buildable for
@@ -963,7 +963,47 @@ public struct BackendSession: Sendable, Identifiable { let id: UUID; let info: B
 
 public protocol BackendDiscovery: Sendable { func discover() -> AsyncStream<[DiscoveredBackend]> }
 public struct DiscoveredBackend: Identifiable, Hashable, Sendable { id: String; name: String; connection: BackendConnection }
+
+// Bonjour discovery (M5-2), in MythwatchFeatures
+public struct BonjourService: Hashable, Sendable { name: String; type: String; domain: String }
+public struct BonjourResolution: Hashable, Sendable { hostTarget: String; port: Int; txt: Data }
+public protocol BonjourBrowsing: Sendable { func browse(type: String) -> AsyncStream<Set<BonjourService>> }
+public protocol BonjourResolving: Sendable { func resolve(_ service: BonjourService) async -> BonjourResolution? }
+public enum MythBackendAdvertisement {                           // pure
+    static let serviceType: String                               // "_mythbackend._tcp"
+    static func txtStrings(_ txt: Data) -> [String]
+    static func backend(_ service: BonjourService, _ resolution: BonjourResolution) -> DiscoveredBackend?
+}
+public final class BonjourBackendDiscovery: BackendDiscovery {
+    public init(browser: any BonjourBrowsing, resolver: any BonjourResolving)
+    public static func onLocalNetwork() -> BonjourBackendDiscovery   // NetworkBonjourBrowser + DNSServiceBonjourResolver
+}
 ```
+
+**Bonjour discovery** (M5-2; the advertisement is described in `BACKEND-V35.md` "Discovery").
+
+- **Mapping** (`MythBackendAdvertisement.backend`). A TXT string equal to `slave` (any case) skips
+  the instance; a missing or other TXT is kept. The API port is the advertised port minus 6 and
+  must be 1...65535. The host is the host target without its trailing dot; the connection is
+  `BackendAddress.parse("<host>:<port>")`, so it is lower-cased, validated and equal to the same
+  address typed by hand (anything that does not parse is skipped). `id` is the instance name;
+  `name` is the instance name without a leading `Mythbackend on ` (any case), or the whole name if
+  that would leave nothing. `txtStrings` reads length-prefixed strings and stops at one that runs
+  past the end.
+- **Discovery** (`BonjourBackendDiscovery.discover()`). Each call opens its own browse of
+  `_mythbackend._tcp` at once. A browse report lists every instance present. A newly present
+  instance is resolved once; while it resolves it is not listed. An instance that leaves is removed
+  and its resolve cancelled; an answer for an instance that has left, or for an earlier appearance
+  of one that came back, is ignored. An instance that fails to resolve (nil) or maps to nil is not
+  listed, and is resolved again only if it leaves and returns. The list is sorted by `name`, then
+  `id`. The first browse report always yields a list (empty if nothing is resolved yet); after
+  that a list is yielded only when it changes. The stream ends when the browse ends; dropping the
+  stream stops the browse and cancels every resolve.
+- **Production ports** (`NetworkBonjour.swift`, not used by package tests). `NetworkBonjourBrowser`
+  uses `NWBrowser` in the `local.` domain; the stream ends if the browser fails or is cancelled and
+  stays open while it waits (for example for local network permission). `DNSServiceBonjourResolver`
+  uses `DNSServiceResolve` on any interface, takes the first answer, and gives nil on an error,
+  after 5 s, or on cancellation. The app's composition root uses `BonjourBackendDiscovery.onLocalNetwork()`.
 
 The app target builds exactly one `AppModel` with production implementations. Tests build it
 with fakes. This is the only place concrete types are chosen.

@@ -310,7 +310,25 @@ locator must be preserved, not double-encoded. A locator that is not a server-re
 ## Discovery
 
 The backend advertises Bonjour service type `_mythbackend._tcp` (`mediaserver.cpp`). [source]
-The advertised port and TXT record contents are [verify] in task M5-2.
+Seen on basement on 2026-11-16 with `dns-sd -B` / `-L` (mDNS only, nothing sent to the API): [live]
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| Instance name | `Mythbackend on basement` | `"Mythbackend on " + ` the MythTV host name [source] |
+| Host target | `basement.local.` | mDNS name of the machine; resolves to 192.168.1.50 and an IPv6 ULA |
+| Port | **6550** | The UPnP server, at `BackendStatusPort + 6` (since v34, commit `dd35e85329`, 2023-07-20; before v34 it was the status port itself). The services API is on the status port, so **API port = advertised port − 6** (6544). |
+| TXT | one string, `master` | `master` or `slave`, from whether this backend is the master [source] |
+
+The backend's web server separately registers a generic `_http._tcp` instance (`mythbackend on
+basement`, port 6544; `mythhttpserver.cpp`). It is not used: mythfrontend registers the same
+kind of record (`mythfrontend on <host>`), so only the name tells them apart.
+
+Mythwatch browses `_mythbackend._tcp` only, resolves each instance, skips a `slave`, and offers
+`http://<host target without the dot>:<port − 6>` (SPEC 6.3 "Bonjour discovery"). The port rule
+lives in `MythBackendAdvertisement` in `MythwatchFeatures`, not in this adapter, because discovery
+runs before the backend's version is known. A later adapter for a backend older than v34 would
+need the offset to be 0, which discovery cannot tell from the advertisement; the probe then reports
+the address as unreachable and the user types it.
 
 ## Errors in the adapter
 

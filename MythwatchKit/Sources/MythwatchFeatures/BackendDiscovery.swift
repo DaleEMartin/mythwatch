@@ -1,8 +1,8 @@
 import Foundation
 import MythwatchBackend
 
-/// Finds backends on the local network (SPEC 6.3). The production implementation is a later task;
-/// this is the seam `AppModel` and the settings view models are written against.
+/// Finds backends on the local network (SPEC 6.3). The seam `AppModel` and the settings view
+/// models are written against; the production implementation is `BonjourBackendDiscovery`.
 public protocol BackendDiscovery: Sendable {
     func discover() -> AsyncStream<[DiscoveredBackend]>
 }

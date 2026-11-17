@@ -220,6 +220,21 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   auto-expiry). Basement moves deletes to `Deleted` with `AUTOEXP` rather than flagging
   `DELETEPENDING` (BACKEND-V35.md). Earlier the same evening basement's HTTP API was slow (8-13 s
   per GET, one 40 s timeout) for a while and then recovered on its own; cause not found.
+- **M5-2 done and committed** (2026-11-16, direct Opus session): Bonjour discovery. Basement
+  advertises `_mythbackend._tcp` as "Mythbackend on basement" at `basement.local.:6550`, TXT
+  `master` (mDNS only; settles the last Bonjour `[verify]`). 6550 is the UPnP server at status port
+  + 6 (since v34), so the API port is advertised − 6. `MythBackendAdvertisement` (pure mapping),
+  `BonjourBackendDiscovery` over two small ports (`BonjourBrowsing`, `BonjourResolving`), and the
+  production `NetworkBonjourBrowser` (`NWBrowser`) and `DNSServiceBonjourResolver`
+  (`DNSServiceResolve`, so the offered address is the `.local` name, not an IP) in
+  `MythwatchFeatures`; the composition root uses `BonjourBackendDiscovery.onLocalNetwork()`.
+  Slaves are skipped. Rules in SPEC 6.3 "Bonjour discovery". 29 tests with fakes local to the test
+  file, 11 mutations caught (3 of them as hangs, which the suite's `.timeLimit` turns into
+  failures); a live test in `BonjourLiveDiscoveryTests` runs with `MYTHWATCH_LIVE_BACKEND` and
+  found basement in 0.14 s. The package still builds for iOS. **Checked by the owner on the Apple
+  TV** after a fresh install: Onboarding listed "basement", selecting it filled
+  `basement.local:6544`, Connect loaded the library. No local-network permission prompt appeared
+  (tvOS appears not to have that permission; the usage string stays for the iPhone app).
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

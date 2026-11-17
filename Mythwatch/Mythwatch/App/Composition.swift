@@ -22,12 +22,8 @@ enum Composition {
             connector: BackendConnector(registry: registry, transport: URLSessionTransport()),
             // One engine per playback, with the deinterlace setting as saved at that moment (SPEC 7).
             makeEngine: { VLCPlayerEngine(deinterlace: settings.load().deinterlace) },
-            discovery: NoBackendDiscovery(),
+            discovery: BonjourBackendDiscovery.onLocalNetwork(),
             now: { ContinuousClock.now })
     }
 }
 
-/// Bonjour discovery arrives in M5-2. Until then nothing is ever found.
-struct NoBackendDiscovery: BackendDiscovery {
-    func discover() -> AsyncStream<[DiscoveredBackend]> { AsyncStream { $0.finish() } }
-}
