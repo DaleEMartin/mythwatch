@@ -210,7 +210,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through
   `Channel/UpdateDBChannel`, and job 8805 queued (`Dvr/ManageJobQueue`, Commflag) to re-flag
   recording 2465 (Seth Meyers / Jon Hamm; old breaks 0:00-0:12, 44:06-45:36, 55:37-59:57; ads
-  around 25:27 were missed). To undo: CommMethod -1 and re-flag. Result pending at commit time.
+  around 25:27 were missed). **Outcome:** the experimental detector was killed within 30 s both
+  times (jobs 8805, 8807: "Failed with Exit Status 140"), so the channel was set back to -1 (global)
+  the same evening. A normal re-flag (job 8808, method 7) completed in about 20 min with the same 3
+  breaks. Backend settings are as they were before; only 2465's markup was regenerated (unchanged).
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its
