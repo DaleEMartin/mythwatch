@@ -115,6 +115,12 @@ private struct PlayerContent: View {
             try? await Task.sleep(until: at, clock: .continuous)
             if !Task.isCancelled { transport.tick() }
         }
+        // Nor for the scrub preview: wake it when a paused scrub has rested long enough.
+        .task(id: transport.scrubPreviewAt) {
+            guard let at = transport.scrubPreviewAt else { return }
+            try? await Task.sleep(until: at, clock: .continuous)
+            if !Task.isCancelled { transport.tick() }
+        }
         // Nor for the skipped banner: wake it when the undo window ends, even while paused.
         .task(id: transport.bannerHidesAt) {
             guard let at = transport.bannerHidesAt else { return }

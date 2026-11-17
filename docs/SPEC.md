@@ -1138,7 +1138,7 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
     public init(session: PlaybackSession, recording: Recording, now: @escaping @MainActor () -> ContinuousClock.Instant)
     public enum Panel { case info, audio, subtitles }; public enum BackResult { case handled, leave }
     public static let hideAfter: Duration = .seconds(5)
-    // state: status (as of the last tick), controlsVisible, hideAt, panel, scrubPosition, audioTracks, subtitleTracks,
+    // state: status (as of the last tick), controlsVisible, hideAt, panel, scrubPosition, scrubPreviewAt, audioTracks, subtitleTracks,
     //        selectedAudioTrack, selectedSubtitleTrack; derived: isPlaying, isWaiting, hasEnded,
     //        failure: UserMessage?, notice: String?, position, duration, progress, elapsedText, remainingText
     // M4-3: public enum CommercialBanner { case skipped(Duration), offer }
@@ -1166,7 +1166,12 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   `scrub(by:)` takes full swipes across the touch surface (1 = one, negative = left) and moves a
   preview from the video's position: one swipe is a fifth of the duration, at least 60 s, or 600 s
   when the duration is unknown, clamped to `0...duration` (at 0 only without one). Nothing is
-  seeked until `commitScrub()` (does not play); `cancelScrub()` drops the preview. `select()`
+  seeked until `commitScrub()` (does not play); `cancelScrub()` drops the preview.
+  *Frame preview* (owner, 2026-11-16): when the preview rests for `scrubPreviewDelay` (0.4 s;
+  `scrubPreviewAt` says when, and the screen calls `tick()` then), `tick()` seeks the paused video
+  to it so its frame shows (VLC redraws a paused seek; checked on the owner's Apple TV), once per
+  resting place; the scrub goes on. `cancelScrub()`, Back and opening the panel then seek the video
+  back to where the scrub began; a commit, a skip or `seek(to:)` leaves it where it is. `select()`
   commits a scrub, else toggles play/pause; `playPause()` commits a scrub and then toggles; a skip
   or `seek(to:)` cancels a scrub and acts from the video's position; opening the panel cancels it.
 - **Back.** `back()` cancels a scrub, else closes the panel (`.handled`), else returns `.leave`

@@ -27,6 +27,8 @@ import Observation
     static let minimumScrubSpan: Duration = .seconds(60)
     /// A full swipe when the duration is unknown.
     static let unknownDurationScrubSpan: Duration = .seconds(600)
+    /// A paused scrub that rests this long moves the video there, so its frame shows.
+    public static let scrubPreviewDelay: Duration = .milliseconds(400)
 
     public let session: PlaybackSession
     public let recording: Recording
@@ -40,6 +42,9 @@ import Observation
     public private(set) var panel: Panel?
     /// The previewed position while scrubbing; nil when not scrubbing.
     public private(set) var scrubPosition: Duration?
+    /// When the resting scrub will move the video to `scrubPosition` so its frame shows; nil when
+    /// nothing is due. The screen calls `tick()` then.
+    public private(set) var scrubPreviewAt: ContinuousClock.Instant?
 
     /// Read from the session when the panel opens and after each selection.
     public private(set) var audioTracks: [MediaTrack] = []
@@ -50,6 +55,10 @@ import Observation
 
     @ObservationIgnored private let now: @MainActor () -> ContinuousClock.Instant
     @ObservationIgnored private var lastInput: ContinuousClock.Instant
+    /// Where the video was when the scrub began, to put it back on a cancel.
+    @ObservationIgnored private var scrubOrigin: Duration?
+    /// The scrub position the video was last moved to by a preview; nil if none yet.
+    @ObservationIgnored private var previewed: Duration?
     /// When the session was last seen to start playing; nil while it is not playing.
     @ObservationIgnored private var playingSince: ContinuousClock.Instant?
     /// The `undoUntil` of a skipped banner this model's clock has passed. Observed, so the
@@ -155,6 +164,13 @@ import Observation
     /// Call it when the session's snapshot changes and when `hideAt` arrives.
     public func tick() {
         if status != session.snapshot.status { status = session.snapshot.status }
+        if let at = scrubPreviewAt, now() >= at, let target = scrubPosition {
+            scrubPreviewAt = nil
+            if previewed != target {
+                previewed = target
+                session.seek(to: target)
+            }
+        }
         if case .skipped(_, let undoUntil) = session.banner, now() >= undoUntil, expiredUndoUntil != undoUntil {
             expiredUndoUntil = undoUntil
         }
@@ -232,27 +248,27 @@ import Observation
 
     /// Cancels a scrub, then skips from where the video is.
     public func skipForward() {
-        scrubPosition = nil
+        endScrub(restore: false)
         session.skipForward()
         showControls()
     }
 
     public func skipBackward() {
-        scrubPosition = nil
+        endScrub(restore: false)
         session.skipBackward()
         showControls()
     }
 
     /// A skip of a given length (negative = back), from a remote command with its own interval.
     public func skip(by offset: Duration) {
-        scrubPosition = nil
+        endScrub(restore: false)
         session.skip(by: offset)
         showControls()
     }
 
     /// A seek from elsewhere (a remote command).
     public func seek(to position: Duration) {
-        scrubPosition = nil
+        endScrub(restore: false)
         session.seek(to: position)
         showControls()
     }
@@ -262,11 +278,16 @@ import Observation
     /// controls.
     public func scrub(by swipes: Double) {
         if session.snapshot.status == .paused {
+            if scrubPosition == nil {
+                scrubOrigin = session.snapshot.position
+                previewed = nil
+            }
             let start = scrubPosition ?? session.snapshot.position
             var target = start + scrubSpan * swipes
             target = max(.zero, target)
             if let duration { target = min(target, duration) }
             scrubPosition = target
+            scrubPreviewAt = now() + Self.scrubPreviewDelay
         }
         showControls()
     }
@@ -274,15 +295,25 @@ import Observation
     /// Seeks to the preview and ends the scrub. Does not play.
     public func commitScrub() {
         guard let target = scrubPosition else { return }
-        scrubPosition = nil
+        endScrub(restore: false)
         session.seek(to: target)
         showControls()
     }
 
-    /// Ends the scrub where the video is.
+    /// Ends the scrub, putting the video back where it was if a preview moved it.
     public func cancelScrub() {
-        scrubPosition = nil
+        endScrub(restore: true)
         showControls()
+    }
+
+    /// Ends a scrub; with `restore`, moves the video back to where the scrub began if a preview
+    /// moved it. Without, the video stays where it is (a skip then acts from there).
+    private func endScrub(restore: Bool) {
+        if restore, previewed != nil, let scrubOrigin { session.seek(to: scrubOrigin) }
+        scrubPosition = nil
+        scrubPreviewAt = nil
+        scrubOrigin = nil
+        previewed = nil
     }
 
     /// Back: cancels a scrub, else closes the panel, else it is time to leave.
@@ -300,7 +331,7 @@ import Observation
 
     /// Opens the panel on this tab (cancelling a scrub) and reads the tracks.
     public func openPanel(_ tab: Panel = .info) {
-        scrubPosition = nil
+        if scrubPosition != nil { endScrub(restore: true) }
         panel = tab
         refreshTracks()
         showControls()

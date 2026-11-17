@@ -202,6 +202,15 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   Set Bookmark Here (far right) is reachable both ways. `TransportModel.status` is now copied by
   `tick()`, so position updates no longer redraw the whole player (that made panel focus hard to
   move while playing). Checked by the owner on the Apple TV: works.
+- **Scrub frame preview done and committed** (2026-11-16, owner on the Apple TV): a paused scrub
+  that rests 0.4 s seeks the video there so its frame shows (VLC does redraw a paused seek); Back,
+  cancel and opening the panel put it back; commit and skips stay (SPEC 6.4 "Frame preview").
+- **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
+  global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
+  WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through
+  `Channel/UpdateDBChannel`, and job 8805 queued (`Dvr/ManageJobQueue`, Commflag) to re-flag
+  recording 2465 (Seth Meyers / Jon Hamm; old breaks 0:00-0:12, 44:06-45:36, 55:37-59:57; ads
+  around 25:27 were missed). To undo: CommMethod -1 and re-flag. Result pending at commit time.
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its

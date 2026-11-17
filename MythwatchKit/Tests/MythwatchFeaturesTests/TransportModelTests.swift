@@ -187,6 +187,88 @@ struct TransportModelTests {
         #expect(rig.seeks.isEmpty)
     }
 
+    // MARK: Scrub frame preview (owner, 2026-11-16)
+
+    @Test func aScrubThatRestsShowsThatFrameAfterTheDelay() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)  // 780 s
+        #expect(rig.model.scrubPreviewAt == rig.clock.now() + .milliseconds(400))
+        rig.advance(.milliseconds(399))
+        #expect(rig.seeks.isEmpty)
+        rig.advance(.milliseconds(1))
+        #expect(rig.seeks == [.seconds(780)])
+        #expect(rig.model.scrubPosition == .seconds(780))  // still scrubbing
+        #expect(rig.model.scrubPreviewAt == nil)
+        rig.advance(.seconds(5))
+        #expect(rig.seeks == [.seconds(780)])  // once per resting place
+        #expect(rig.engine.snapshot.status == .paused)
+    }
+
+    @Test func movingAgainRestartsTheWaitAndPreviewsTheNewPlace() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)
+        rig.advance(.milliseconds(300))
+        rig.model.scrub(by: 0.25)  // 960 s
+        #expect(rig.model.scrubPreviewAt == rig.clock.now() + .milliseconds(400))
+        rig.advance(.milliseconds(300))
+        #expect(rig.seeks.isEmpty)
+        rig.advance(.milliseconds(100))
+        #expect(rig.seeks == [.seconds(960)])
+        rig.model.scrub(by: -0.25)  // 780 s
+        rig.advance(.milliseconds(400))
+        #expect(rig.seeks == [.seconds(960), .seconds(780)])
+    }
+
+    @Test func noPreviewIsDueWhenNotScrubbing() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        #expect(rig.model.scrubPreviewAt == nil)
+        rig.model.scrub(by: 0.25)
+        rig.model.commitScrub()
+        #expect(rig.model.scrubPreviewAt == nil)
+    }
+
+    @Test func cancellingAfterAPreviewPutsTheVideoBack() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)
+        rig.advance(.milliseconds(400))
+        rig.model.cancelScrub()
+        #expect(rig.seeks == [.seconds(780), .seconds(600)])
+        #expect(rig.model.scrubPosition == nil)
+    }
+
+    @Test func backAfterAPreviewPutsTheVideoBack() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)
+        rig.advance(.milliseconds(400))
+        #expect(rig.model.back() == .handled)
+        #expect(rig.seeks == [.seconds(780), .seconds(600)])
+    }
+
+    @Test func openingThePanelAfterAPreviewPutsTheVideoBack() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)
+        rig.advance(.milliseconds(400))
+        rig.model.openPanel()
+        #expect(rig.seeks == [.seconds(780), .seconds(600)])
+    }
+
+    @Test func committingAfterAPreviewStaysThere() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(by: 0.25)
+        rig.advance(.milliseconds(400))
+        rig.model.select()
+        #expect(rig.seeks.last == .seconds(780))
+        #expect(!rig.seeks.contains(.seconds(600)))
+        #expect(rig.model.scrubPosition == nil)
+    }
+
     @Test func theScrubStaysWithinTheRecording() async {
         let rig = TransportRig()
         await rig.paused(at: .seconds(600))
