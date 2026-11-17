@@ -211,6 +211,33 @@ final class MythwatchUITests: XCTestCase {
         attachScreenshot("6-settings")
     }
 
+    /// M5-4: Settings › About › Licences shows the bundled notices: VLCKit's version and source,
+    /// the LGPL, and libzvbi with its GPL-2 part (docs/VLCKIT.md §11).
+    @MainActor
+    func testLicencesNameVLCKitAndItsLicences() {
+        launch(backendSaved: true)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        remote.press(.right)  // the tab bar has focus at launch
+        XCTAssertTrue(app.textFields["address.field"].waitForExistence(timeout: 5))
+        // A Form row takes focus as a cell without our identifier: find it by its label.
+        let licences = app.cells.matching(NSPredicate(format: "label == %@ AND hasFocus == true", "Licences")).firstMatch
+        for _ in 0..<20 where !licences.exists { remote.press(.down) }
+        XCTAssertTrue(licences.exists, "could not focus Licences")
+        remote.press(.select)
+        XCTAssertTrue(app.scrollViews["licences.screen"].waitForExistence(timeout: 5))
+        func shows(_ text: String) -> Bool {
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists
+        }
+        XCTAssertTrue(shows("TVVLCKit 3.7.4"))
+        XCTAssertTrue(shows("code.videolan.org/videolan/VLCKit"))
+        XCTAssertTrue(shows("GNU Lesser General Public License"))
+        XCTAssertTrue(shows("libzvbi"))
+        // The text is built lazily: scroll down a paragraph at a time, as a viewer would.
+        for _ in 0..<8 where !shows("GNU General Public License, version 2") { remote.press(.down) }
+        XCTAssertTrue(shows("GNU General Public License, version 2"))
+        attachScreenshot("16-licences")
+    }
+
     // MARK: States and resilience (M5-3)
 
     @MainActor

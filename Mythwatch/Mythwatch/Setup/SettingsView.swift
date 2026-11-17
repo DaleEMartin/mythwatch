@@ -125,6 +125,7 @@ struct LicencesView: View {
             }
             .padding(80)
         }
+        .accessibilityIdentifier("licences.screen")
         .navigationTitle(Labels.licences)
     }
 }

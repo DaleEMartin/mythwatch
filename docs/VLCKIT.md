@@ -74,14 +74,30 @@ API differences between the platforms:
 `nm | grep vlc_entry__`). VLC's configure line in the binary has `--disable-a52 --disable-faad
 --disable-mad --disable-goom --disable-projectm --disable-dvdread --disable-dvdnav`, and none of
 the GPL-only modules is present (`a52`, `dca`, `libmpeg2`, `faad`, `x264`/`x265`, `postproc`,
-`goom`). MPEG-2 video and **AC-3 audio decode through FFmpeg's libavcodec (LGPL)**. The binary
+`goom`), though one bundled library, libzvbi, carries a GPL-2-only file (below). MPEG-2 video and **AC-3 audio decode through FFmpeg's libavcodec (LGPL)**. The binary
 does contain some GPL text, but it is template text, not code: libVLC's `--version` banner and
 gnulib's version-message templates.
 
-`[verify]` (for M5-4, release documents): the binary bundles third-party libraries (FFmpeg,
-GnuTLS, libxml2, libzvbi, live555, libsmb2, libass, taglib and others). VideoLAN ships them under
-the LGPL umbrella, but their individual licences were not audited here. Check **libzvbi**
-first: older releases had GPL parts.
+**Bundled libraries (settled in M5-4, 2026-11-17).** The binary bundles third-party libraries
+(FFmpeg, libgcrypt, libxml2, libzvbi, libsmb2, libnfs, libass, dav1d, libaom, libvpx and others;
+the list with their licences is in `THIRD_PARTY_NOTICES.md`). Their licences were taken from what
+each project publishes, not audited file by file, except libzvbi, which was:
+
+- The binary holds **zvbi 0.2.45** (VLC's `codec_libzvbi` module, alongside its own `telx`
+  decoder). zvbi's `COPYING.md` puts `src/*` under LGPL-2+ except `src/packet-830.*` and
+  `src/pdc.*`, which are **GPL version 2 only** (no "or later"; headers checked at tag `v0.2.45`).
+- `nm` finds all four functions `src/packet-830.c` defines (`vbi_decode_teletext_8301_cni`,
+  `_8301_local_time`, `_8302_cni`, `_8302_pdc`) as exported code in the tvOS binary. None of
+  `pdc.c`'s functions (`vbi_pil_*`, `vbi_pty_validity_window`) are present.
+- So **the shipped TVVLCKit contains GPL-2-only code.** Mythwatch never uses it (US recordings carry
+  CEA-608 captions, which VLC's `cc` decoder handles; zvbi is for European Teletext), but it is in
+  the framework the app embeds. `THIRD_PARTY_NOTICES.md` and the in-app licences now name it and
+  include the GPL 2 text. What else this means for distributing the app (for instance on the App
+  Store, item 5 of section 11) is the owner's decision; one way out is a VLCKit build with
+  `--disable-zvbi`, which this project does not make today.
+- The other GPL-looking strings in the binary are still only template text: VLC's `--version`
+  banner and gnulib's version-message templates. The `dca`, `mpeg2` and `postprocess` symbols are
+  FFmpeg's own LGPL decoders, not libdca, libmpeg2 or libpostproc.
 
 ## 3. Measurements (Apple TV HD unless stated)
 

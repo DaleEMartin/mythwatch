@@ -54,7 +54,8 @@ mythwatch/
   Mythwatch/                       tvOS app
     Mythwatch.xcodeproj
     Info.plist
-    Mythwatch/                     SwiftUI views, VLCPlayerEngine, App/Composition.swift (composition root)
+    Mythwatch/                     SwiftUI views, VLCPlayerEngine, App/Composition.swift (composition root),
+                                   Assets.xcassets (app icon and Top Shelf images; placeholders, M5-4)
     MythwatchUITests/
   Tools/capture-fixtures.sh  Tools/check-deps.sh
 ```
@@ -1467,7 +1468,8 @@ section 5 and the findings in `docs/VLCKIT.md`, in particular:
 merged into the app binary. Do not use a static VLCKit build. No Mythwatch source file other than
 `VLCPlayerEngine` may import it, and no VLCKit source is copied into this repo. The exact VLCKit
 version, where its source can be obtained, and the LGPL text go in `THIRD_PARTY_NOTICES.md` and
-the in-app licences screen.
+the in-app licences screen, with the libraries VLCKit bundles and their licences. The pinned build
+contains GPL-2-only code from libzvbi (`docs/VLCKIT.md` §2), so the GPL 2 text goes there too (M5-4).
 
 The pinned build is VideoLAN's **TVVLCKit 3.7.4** (MobileVLCKit 3.7.4 for the later iPhone app),
 libVLC 3.0.24. `Tools/fetch-vlckit.sh` downloads it, checks its SHA-256, and unpacks it into the

@@ -250,6 +250,23 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   xcodebuild reports TEST FAILED. Every test passes in shorter runs, and the pre-M5-3 suite (9
   tests) succeeds, so it looks tied to the number of launches, not to a test. Not checked by the
   owner with VoiceOver on a real Apple TV.
+- **M5-4 done and committed** (2026-11-17, direct Opus session): release documents. `README.md`
+  rewritten (what it is, requirements, build, test, how it is built, adding a backend version,
+  licence). The About section and Licences screen already existed (M2-7); a UI test now opens
+  Settings › About › Licences and checks the VLCKit version and source, the LGPL, libzvbi and the
+  GPL 2 (`testLicencesNameVLCKitAndItsLicences`). Placeholder app icon (three layers, 400×240 @1x/@2x
+  and 1280×768) and Top Shelf images (1920×720 and 2320×720, @1x/@2x) in
+  `Mythwatch/Mythwatch/Assets.xcassets`, drawn by a throwaway script (eye and "Mythwatch" on flat
+  violet; 780 KB), set as the app icon in both configurations. Settled the VLCKit `[verify]`:
+  **TVVLCKit 3.7.4 contains GPL-2-only code** from zvbi 0.2.45 (`src/packet-830.c`, all four of its
+  functions linked; `docs/VLCKIT.md` §2). `THIRD_PARTY_NOTICES.md` now has a libzvbi entry, a table
+  of the other bundled libraries (licences as their projects publish them, not audited), and the
+  GPL 2 text. The full 15-test UI run succeeded this time (no Mach -308 relaunch failure).
+- **Owner decision pending: GPL-2 code in VLCKit** (found 2026-11-17, M5-4). Nothing to do for
+  private use. Before any distribution, especially the App Store (`docs/VLCKIT.md` §11 item 5),
+  decide whether to accept it or build VLCKit with `--disable-zvbi` (Mythwatch does not use zvbi).
+  Permissive libraries (BSD, MIT, ISC, libpng, zlib) also ask for their copyright notices in
+  binary distributions; the notices file names them but does not yet reproduce each text.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through
