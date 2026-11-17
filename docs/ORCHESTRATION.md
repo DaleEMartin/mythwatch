@@ -262,11 +262,20 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   functions linked; `docs/VLCKIT.md` §2). `THIRD_PARTY_NOTICES.md` now has a libzvbi entry, a table
   of the other bundled libraries (licences as their projects publish them, not audited), and the
   GPL 2 text. The full 15-test UI run succeeded this time (no Mach -308 relaunch failure).
-- **Owner decision pending: GPL-2 code in VLCKit** (found 2026-11-17, M5-4). Nothing to do for
-  private use. Before any distribution, especially the App Store (`docs/VLCKIT.md` §11 item 5),
-  decide whether to accept it or build VLCKit with `--disable-zvbi` (Mythwatch does not use zvbi).
-  Permissive libraries (BSD, MIT, ISC, libpng, zlib) also ask for their copyright notices in
-  binary distributions; the notices file names them but does not yet reproduce each text.
+- **zvbi removed from VLCKit** (owner, 2026-11-17: "get rid of zvbi"; done the same day, direct
+  Opus session). `Tools/build-vlckit.sh` builds TVVLCKit 3.7.4 from source with VideoLAN's own
+  script, zvbi off and deployment target 15.0 (Xcode 27's minimum), using a GNU make 4.4.1 it
+  builds itself (macOS's 3.81 breaks parallel contrib builds). The work tree is
+  `~/Library/Caches/mythwatch-vlckit` (VLCKit's scripts fail on paths with spaces). Result: no
+  `vbi_` symbols in either slice, one module fewer than VideoLAN's binary (`codec_libzvbi`), the
+  same 367 public symbols, `cc` and `telx` present. App builds and the full UI suite passes on it
+  (15 tests, 1 skipped). `THIRD_PARTY_NOTICES.md` dropped libzvbi and the GPL 2 text; the licences
+  test checks "libzvbi is left out". `Tools/fetch-vlckit.sh` now fetches only the prebuilt
+  MobileVLCKit (still with zvbi) for the later iPhone app. VideoLAN's binary is kept for comparison
+  at `build/TVVLCKit-prebuilt-3.7.4.xcframework` (git-ignored). **Not yet checked: real playback on
+  the owner's Apple TV** with this build (picture, sound, deinterlace, captions, seeking); the UI
+  tests use a fake engine. Still open for any public release: the permissive libraries' notice
+  texts (BSD, MIT, ISC, libpng, zlib) are named but not reproduced.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

@@ -1468,13 +1468,15 @@ section 5 and the findings in `docs/VLCKIT.md`, in particular:
 merged into the app binary. Do not use a static VLCKit build. No Mythwatch source file other than
 `VLCPlayerEngine` may import it, and no VLCKit source is copied into this repo. The exact VLCKit
 version, where its source can be obtained, and the LGPL text go in `THIRD_PARTY_NOTICES.md` and
-the in-app licences screen, with the libraries VLCKit bundles and their licences. The pinned build
-contains GPL-2-only code from libzvbi (`docs/VLCKIT.md` §2), so the GPL 2 text goes there too (M5-4).
+the in-app licences screen, with the libraries VLCKit bundles and their licences (M5-4).
 
-The pinned build is VideoLAN's **TVVLCKit 3.7.4** (MobileVLCKit 3.7.4 for the later iPhone app),
-libVLC 3.0.24. `Tools/fetch-vlckit.sh` downloads it, checks its SHA-256, and unpacks it into the
-git-ignored `Vendor/`. The project embeds `Vendor/TVVLCKit.xcframework`. Run the script once
-after cloning, before building the app.
+The pinned build is **TVVLCKit 3.7.4**, libVLC 3.0.24, **built from source without libzvbi**
+(owner, 2026-11-17: VideoLAN's binary carries zvbi's GPL-2-only code; `docs/VLCKIT.md` §1-2).
+`Tools/build-vlckit.sh` builds it and installs it into the git-ignored `Vendor/`; the project
+embeds `Vendor/TVVLCKit.xcframework`. Run the script once after cloning, before building the app.
+Do not go back to a prebuilt TVVLCKit that contains zvbi. `Tools/fetch-vlckit.sh` fetches
+VideoLAN's prebuilt MobileVLCKit 3.7.4 for the later iPhone app; it still contains zvbi and must be
+built the same way before an iPhone release.
 
 `Info.plist` additions: `NSAppTransportSecurity > NSAllowsLocalNetworking = true`,
 `NSLocalNetworkUsageDescription`, `NSBonjourServices = ["_mythbackend._tcp"]`.

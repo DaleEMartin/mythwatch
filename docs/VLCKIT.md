@@ -12,20 +12,30 @@ streams (section 4).
 
 | | |
 | --- | --- |
-| tvOS | **TVVLCKit 3.7.4**, official VideoLAN CocoaPods binary, libVLC **3.0.24** "Vetinari" (changeset `3.0.24-42-g94bb4bd0e6`) |
+| tvOS | **TVVLCKit 3.7.4 built from source without libzvbi** (`Tools/build-vlckit.sh`, since 2026-11-17), libVLC **3.0.24** "Vetinari" (VLC commit `6de05adc` plus VLCKit's 42 patches, as in VideoLAN's build). Until then: VideoLAN's CocoaPods binary (changeset `3.0.24-42-g94bb4bd0e6`) |
 | iOS (later iPhone app) | **MobileVLCKit 3.7.4**, the same VLCKit version from the same publisher |
-| tvOS archive | `https://download.videolan.org/cocoapods/prod/TVVLCKit-3.0-20260930-0854.tar.xz`, SHA-256 `07892cae8e59e95a23f1fcf11692f802eae106312aa5ad9782faa2556b2d65d5` |
+| tvOS archive (no longer used) | `https://download.videolan.org/cocoapods/prod/TVVLCKit-3.0-20260930-0854.tar.xz`, SHA-256 `07892cae8e59e95a23f1fcf11692f802eae106312aa5ad9782faa2556b2d65d5` |
 | iOS archive | `https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-3.0-20260922-1512.tar.xz`, SHA-256 `c649c4c47bd065b3a5511746361b5a9066a34033f2df9cbc9454409c0f363b52` |
 | Source | `https://code.videolan.org/videolan/VLCKit` (tag `3.7.4`); libVLC `https://code.videolan.org/videolan/vlc` (branch `3.0.x`) |
 | Licence | LGPL 2.1 or later (`COPYING.txt` in the archive) |
 
-**How it gets into the app.** VideoLAN does not publish a Swift package, only CocoaPods archives.
-CocoaPods is not used here. `Tools/fetch-vlckit.sh` downloads the exact archive the official
-podspec names, checks the SHA-256, and unpacks the `.xcframework` into `Vendor/`, which git
-ignores. The Xcode project links `Vendor/TVVLCKit.xcframework` and embeds it with "Embed & Sign".
-Run `Tools/fetch-vlckit.sh` once after cloning (add `--ios` for MobileVLCKit). To change the
-version, edit the URLs and checksums in that script from the new podspecs, and update this file
-and `THIRD_PARTY_NOTICES.md` in the same commit.
+**How it gets into the app** (owner, 2026-11-17: build without zvbi). `Tools/build-vlckit.sh`
+clones VLCKit at tag 3.7.4 (commit checked), runs VideoLAN's own release build
+(`buildMobileVLCKit.sh -vft`, as their CI's TVVLCKit job does) with three lines changed, checks
+the result, and copies `TVVLCKit.xcframework` into `Vendor/`, which git ignores. The changes:
+libzvbi off in the contrib build and in VLC's configure (section 2), and the framework's
+deployment target raised from tvOS 10.2 to 15.0, the oldest Xcode 27 accepts. It also builds GNU
+make 4.4.1 for the build to use: with macOS's make 3.81, parallel contrib builds fail with "read
+jobs pipe: Resource temporarily unavailable" once VLC's own ninja (a jobserver build) shares the
+job pipe. The work tree lives outside the repo (`~/Library/Caches/mythwatch-vlckit`) because
+VLCKit's scripts break on paths with spaces. On an 18-core Mac a clean build takes roughly 15
+minutes. The script fails unless every slice has no zvbi symbol and still has VLC's `telx`
+module. Compared with VideoLAN's binary, the device slice lacks exactly one module
+(`codec_libzvbi`, 238 of 239) and exports the same 367 `libvlc_*` and `VLC*` class symbols.
+Run `Tools/build-vlckit.sh` once after cloning. `Tools/fetch-vlckit.sh` now fetches only
+VideoLAN's prebuilt MobileVLCKit for the later iPhone app, which still contains zvbi. To change
+the version, update the tag and commit in `build-vlckit.sh`, and this file and
+`THIRD_PARTY_NOTICES.md`, in the same commit.
 
 ### Why 3.7.4 and not 4.0
 
@@ -74,11 +84,12 @@ API differences between the platforms:
 `nm | grep vlc_entry__`). VLC's configure line in the binary has `--disable-a52 --disable-faad
 --disable-mad --disable-goom --disable-projectm --disable-dvdread --disable-dvdnav`, and none of
 the GPL-only modules is present (`a52`, `dca`, `libmpeg2`, `faad`, `x264`/`x265`, `postproc`,
-`goom`), though one bundled library, libzvbi, carries a GPL-2-only file (below). MPEG-2 video and **AC-3 audio decode through FFmpeg's libavcodec (LGPL)**. The binary
+`goom`), though VideoLAN's binary bundles libzvbi, which carries a GPL-2-only file (below; our
+build leaves it out). MPEG-2 video and **AC-3 audio decode through FFmpeg's libavcodec (LGPL)**. The binary
 does contain some GPL text, but it is template text, not code: libVLC's `--version` banner and
 gnulib's version-message templates.
 
-**Bundled libraries (settled in M5-4, 2026-11-17).** The binary bundles third-party libraries
+**Bundled libraries (settled in M5-4, 2026-11-17).** VideoLAN's binary bundles third-party libraries
 (FFmpeg, libgcrypt, libxml2, libzvbi, libsmb2, libnfs, libass, dav1d, libaom, libvpx and others;
 the list with their licences is in `THIRD_PARTY_NOTICES.md`). Their licences were taken from what
 each project publishes, not audited file by file, except libzvbi, which was:
@@ -91,10 +102,10 @@ each project publishes, not audited file by file, except libzvbi, which was:
   `pdc.c`'s functions (`vbi_pil_*`, `vbi_pty_validity_window`) are present.
 - So **the shipped TVVLCKit contains GPL-2-only code.** Mythwatch never uses it (US recordings carry
   CEA-608 captions, which VLC's `cc` decoder handles; zvbi is for European Teletext), but it is in
-  the framework the app embeds. `THIRD_PARTY_NOTICES.md` and the in-app licences now name it and
-  include the GPL 2 text. What else this means for distributing the app (for instance on the App
-  Store, item 5 of section 11) is the owner's decision; one way out is a VLCKit build with
-  `--disable-zvbi`, which this project does not make today.
+  the framework the app embedded. **Resolved the same day** (owner: get rid of it): the app now
+  embeds our own build with `--disable-zvbi` (section 1), which has no zvbi code, and the GPL 2
+  text came out of `THIRD_PARTY_NOTICES.md`. VLC's own `telx` decoder (LGPL) still handles
+  Teletext subtitles.
 - The other GPL-looking strings in the binary are still only template text: VLC's `--version`
   banner and gnulib's version-message templates. The `dca`, `mpeg2` and `postprocess` symbols are
   FFmpeg's own LGPL decoders, not libdca, libmpeg2 or libpostproc.
@@ -256,8 +267,9 @@ not legal advice:
    LGPL 2.1 text, and say where the source is. This goes in `THIRD_PARTY_NOTICES.md` and the
    in-app licences screen (SPEC §7).
 3. **Make the source available.** Point to the exact VLCKit and libVLC source for the version
-   shipped (section 1). The URLs above are VideoLAN's own; keeping a copy of the source archive
-   with each release is the safe way to honour a source request for up to three years.
+   shipped (section 1), and to how it was built (`Tools/build-vlckit.sh`). The URLs above are
+   VideoLAN's own; keeping a copy of the source (the work tree, with its contrib tarballs) with
+   each release is the safe way to honour a source request for up to three years.
 4. **Do not forbid reverse engineering** of the app for debugging such changes. Mythwatch is MIT
    and open source, so this is already met.
 5. **App Store.** Apple's terms add use restrictions that some people consider incompatible with

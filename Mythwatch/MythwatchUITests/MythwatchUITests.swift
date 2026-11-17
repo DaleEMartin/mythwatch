@@ -212,7 +212,7 @@ final class MythwatchUITests: XCTestCase {
     }
 
     /// M5-4: Settings › About › Licences shows the bundled notices: VLCKit's version and source,
-    /// the LGPL, and libzvbi with its GPL-2 part (docs/VLCKIT.md §11).
+    /// how it was built (without libzvbi), and the LGPL (docs/VLCKIT.md §11).
     @MainActor
     func testLicencesNameVLCKitAndItsLicences() {
         launch(backendSaved: true)
@@ -231,10 +231,9 @@ final class MythwatchUITests: XCTestCase {
         XCTAssertTrue(shows("TVVLCKit 3.7.4"))
         XCTAssertTrue(shows("code.videolan.org/videolan/VLCKit"))
         XCTAssertTrue(shows("GNU Lesser General Public License"))
-        XCTAssertTrue(shows("libzvbi"))
         // The text is built lazily: scroll down a paragraph at a time, as a viewer would.
-        for _ in 0..<8 where !shows("GNU General Public License, version 2") { remote.press(.down) }
-        XCTAssertTrue(shows("GNU General Public License, version 2"))
+        for _ in 0..<8 where !shows("libzvbi is left out") { remote.press(.down) }
+        XCTAssertTrue(shows("libzvbi is left out"))
         attachScreenshot("16-licences")
     }
 

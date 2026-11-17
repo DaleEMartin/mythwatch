@@ -26,11 +26,12 @@ state.
 
 ## Building
 
-VLCKit is not kept in git. Fetch it once after cloning; the script downloads VideoLAN's pinned
-release, checks its SHA-256, and unpacks it into `Vendor/`:
+VLCKit is not kept in git. Build it once after cloning; the script builds VideoLAN's VLCKit
+3.7.4 from source, without the one library that has a GPL-only part (libzvbi), and puts it in
+`Vendor/`. It needs only Xcode and the network, and takes roughly 15 minutes on a fast Mac:
 
 ```
-Tools/fetch-vlckit.sh            # tvOS framework into Vendor/ (add --ios for the iPhone one)
+Tools/build-vlckit.sh            # tvOS framework into Vendor/
 ```
 
 Then open `Mythwatch/Mythwatch.xcodeproj`, choose the **Mythwatch** scheme, and run it on the
@@ -103,7 +104,7 @@ The full procedure is in SPEC §4, "Adding a backend version".
 Mythwatch is MIT-licensed (see `LICENSE`). It contains no code from MythTV.
 
 The app embeds VideoLAN's VLCKit, which is under the GNU LGPL and contains other open-source
-libraries, one with a GPL-2 part. `THIRD_PARTY_NOTICES.md` lists them with their licences and
+libraries. `THIRD_PARTY_NOTICES.md` lists them with their licences and
 where to get their source; the app shows the same text under Settings › About › Licences.
 
 The app icon and Top Shelf images are placeholders.
