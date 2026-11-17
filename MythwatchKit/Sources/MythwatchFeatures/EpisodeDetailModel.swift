@@ -46,10 +46,15 @@ enum EpisodeLabels {
 /// nothing to resume. It clears when the next load starts; a failed load keeps what an earlier
 /// load found.
 ///
-/// `delete()` sends `delete(id:allowRerecord: false)` and waits for the answer: the page closes
-/// when `isDeleted` becomes true, so a failure must keep the page up to be seen. While it is in
-/// flight `isDeleting` is true and another `delete()` sends nothing; a failure sets `problem`.
+/// `delete(allowRerecord:)` sends `delete(id:allowRerecord:)` with the user's choice and waits for
+/// the answer: the page closes when `isDeleted` becomes true, so a failure must keep the page up to
+/// be seen. While it is in flight `isDeleting` is true and another call joins it (sending nothing,
+/// whatever its choice); a failure sets `problem`.
 /// A successful delete calls `onChange` with `.deleted`. Confirming is the view's job.
+///
+/// `playbackFinished(_:)` sets `offersDelete` when the playback reached the end and the recording
+/// is neither deleted nor being deleted; the view then asks whether to delete it. Any other
+/// outcome, `dismissDeleteOffer()` and starting a delete clear it.
 ///
 /// A concurrent `load()` joins the one running. If every caller waiting is cancelled the load is
 /// cancelled and publishes nothing: no message, `isLoading` back to false, the positions as they
@@ -63,6 +68,8 @@ enum EpisodeLabels {
     public private(set) var isDeleting = false
     /// The backend accepted the delete: the view should close the page.
     public private(set) var isDeleted = false
+    /// Playback just reached the end: the view should offer to delete the recording.
+    public private(set) var offersDelete = false
 
     @ObservationIgnored private let state: any PlaybackStateService
     @ObservationIgnored private let recordings: any RecordingsService
@@ -85,19 +92,20 @@ enum EpisodeLabels {
         self.onChange = onChange
     }
 
-    /// Deletes the recording (no rerecord). The returned task ends when the backend has
-    /// answered; the caller cannot cancel the delete.
+    /// Deletes the recording; `allowRerecord` lets MythTV record it again. The returned task ends
+    /// when the backend has answered; the caller cannot cancel the delete.
     @discardableResult
-    public func delete() -> Task<Void, Never> {
+    public func delete(allowRerecord: Bool) -> Task<Void, Never> {
         if let deleteTask { return deleteTask }
         guard !isDeleted else { return Task {} }
+        offersDelete = false
         problem = nil
         isDeleting = true
         let task = Task<Void, Never> { [weak self] in
             guard let self else { return }
             let id = recording.id
             do {
-                try await recordings.delete(id: id, allowRerecord: false)
+                try await recordings.delete(id: id, allowRerecord: allowRerecord)
                 isDeleted = true
                 onChange?(.deleted(id))
             } catch {
@@ -108,6 +116,16 @@ enum EpisodeLabels {
         }
         deleteTask = task
         return task
+    }
+
+    /// The player closed with `outcome`: offer a delete when it reached the end.
+    public func playbackFinished(_ outcome: PlaybackOutcome) {
+        offersDelete = outcome.reachedEnd && !isDeleted && !isDeleting
+    }
+
+    /// The viewer kept the recording.
+    public func dismissDeleteOffer() {
+        offersDelete = false
     }
 
     public var startOptions: [StartOption] {

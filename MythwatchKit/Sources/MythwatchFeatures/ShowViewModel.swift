@@ -25,8 +25,8 @@ import Observation
 ///   (on, off, on in quick succession sends one write). A failed write rolls the screen back to
 ///   the last state the backend confirmed, unless a later toggle has already asked for something
 ///   else; a later toggle is never undone by an earlier failure.
-/// - `delete(_:)` removes the recording at once and sends `delete(id:allowRerecord: false)`;
-///   a failure puts it back. The model never asks "are you sure": `askBeforeDelete` is the
+/// - `delete(_:allowRerecord:)` removes the recording at once and sends
+///   `delete(id:allowRerecord:)` with the user's choice; a failure puts it back. The model never asks "are you sure": `askBeforeDelete` is the
 ///   view's concern.
 ///
 /// After each successful write the model calls `onChange`, which `AppModel` wires to the
@@ -159,7 +159,7 @@ import Observation
     // MARK: Delete
 
     @discardableResult
-    public func delete(_ recording: Recording) -> Task<Void, Never> {
+    public func delete(_ recording: Recording, allowRerecord: Bool) -> Task<Void, Never> {
         let id = recording.id
         guard let index = show.recordings.firstIndex(where: { $0.id == id }) else { return Task {} }
         problem = nil
@@ -167,13 +167,13 @@ import Observation
         removed[id] = recordings.remove(at: index)
         replaceRecordings(recordings)
         return Task<Void, Never> { [weak self] in
-            if let self { await self.sendDelete(id) }
+            if let self { await self.sendDelete(id, allowRerecord: allowRerecord) }
         }
     }
 
-    private func sendDelete(_ id: RecordingID) async {
+    private func sendDelete(_ id: RecordingID, allowRerecord: Bool) async {
         do {
-            try await service.delete(id: id, allowRerecord: false)
+            try await service.delete(id: id, allowRerecord: allowRerecord)
             removed[id] = nil
             onChange?(.deleted(id))
         } catch {

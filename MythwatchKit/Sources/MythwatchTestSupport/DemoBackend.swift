@@ -109,7 +109,8 @@ public enum DemoBackend {
 
 /// `FakePlayerEngine` that also knows each demo recording's length, so the player shows the
 /// remaining time and the breaks on the scrubber. The length comes from the stream URL's last
-/// component, the recording id (`FakeMediaLocator`).
+/// component, the recording id (`FakeMediaLocator`). A seek to the end ends playback, as a real
+/// engine does (M5-1: the UI test skips to the end to see the delete offer).
 @MainActor final class DemoPlayerEngine: PlayerEngine {
     private let inner = FakePlayerEngine()
     private let lengths: [String: Duration]
@@ -126,7 +127,10 @@ public enum DemoBackend {
 
     func play() { inner.play() }
     func pause() { inner.pause() }
-    func seek(to position: Duration) { inner.seek(to: position) }
+    func seek(to position: Duration) {
+        inner.seek(to: position)
+        if let length = inner.snapshot.duration, length > .zero, position >= length { inner.emitEnded() }
+    }
     func stop() { inner.stop() }
     var audioTracks: [MediaTrack] { inner.audioTracks }
     var subtitleTracks: [MediaTrack] { inner.subtitleTracks }

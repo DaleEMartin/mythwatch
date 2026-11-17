@@ -205,6 +205,21 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 - **Scrub frame preview done and committed** (2026-11-16, owner on the Apple TV): a paused scrub
   that rests 0.4 s seeks the video there so its frame shows (VLC does redraw a paused seek); Back,
   cancel and opening the panel put it back; commit and skips stay (SPEC 6.4 "Frame preview").
+- **M5-1 done and committed** (2026-11-16, direct Opus session with the owner): delete.
+  `V35RecordingsService.delete` posts `DeleteRecording` (`RecordedId`, `ForceDelete=false`,
+  `AllowRerecord`) through `postExpectingTrue`; the stub and `V35NotImplemented` are gone.
+  `ShowViewModel.delete(_:allowRerecord:)` and `EpisodeDetailModel.delete(allowRerecord:)` take the
+  choice (no default). Every Delete opens a dialog, even with Ask Before Deleting off (owner,
+  2026-11-16: the re-record question is asked each time; the setting only drops the "can't be
+  undone" warning): Delete / Delete and Let MythTV Record It Again / Cancel, built once in
+  `DeleteChoices`. Playback that reached the end offers the same dialog on the episode page
+  (`EpisodeDetailModel.offersDelete`, `playbackFinished(_:)`, `dismissDeleteOffer()`; Keep cancels).
+  `DemoPlayerEngine` ends on a seek to the end, for the new UI test. **Live:** the owner deleted 3749
+  from the Apple TV (no re-record) and, unprompted, 622, 745 and 1913 (Amber Street Sessions); the owner
+  chose to leave all four in the backend's `Deleted` group (recoverable from mythfrontend until
+  auto-expiry). Basement moves deletes to `Deleted` with `AUTOEXP` rather than flagging
+  `DELETEPENDING` (BACKEND-V35.md). Earlier the same evening basement's HTTP API was slow (8-13 s
+  per GET, one 40 s timeout) for a while and then recovered on its own; cause not found.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

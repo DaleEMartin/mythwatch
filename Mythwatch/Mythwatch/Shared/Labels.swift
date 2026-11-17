@@ -42,6 +42,12 @@ enum Labels {
         "Delete \u{201C}\(episodeTitle(recording))\u{201D}?"
     }
     static let deleteDetail = "The recording is removed from your MythTV backend. This can't be undone."
+    static let deleteAndRerecord = "Delete and Let MythTV Record It Again"
+    static let rerecordDetail = "If it's shown again, MythTV can record it again, or not."
+    static let keep = "Keep"
+    static func finishedQuestion(_ recording: Recording) -> String {
+        "You've finished \u{201C}\(episodeTitle(recording))\u{201D}. Delete it?"
+    }
     static let watched = "Watched"
     static let partWatched = "Part watched"
 

@@ -207,7 +207,7 @@ struct ShowViewModelTests {
     @Test func deleteRemovesTheRecordingAtOnceAndKeepsItGoneOnSuccess() async throws {
         fake.suspend(.delete)
         let ep = model.seasons[0].episodes[0]
-        let task = model.delete(ep)
+        let task = model.delete(ep, allowRerecord: false)
         #expect(isWatched(1) == nil)
         #expect(model.show.episodeCount == 3)
         try await fake.waitForParked()
@@ -219,10 +219,16 @@ struct ShowViewModelTests {
         #expect(log.changes == [.deleted(rid(1))])
     }
 
+    @Test(arguments: [false, true])
+    func deleteSendsTheRerecordChoice(_ allowRerecord: Bool) async {
+        await model.delete(model.seasons[0].episodes[0], allowRerecord: allowRerecord).value
+        #expect(fake.calls == [.delete(rid(1), allowRerecord: allowRerecord)])
+    }
+
     @Test func deleteRollsBackInTheRightPlaceAndSaysWhyWhenTheCallFails() async {
         fake.failNext(.unreachable("DIAG"), on: .delete)
         let before = model.seasons
-        await model.delete(model.seasons[0].episodes[0]).value
+        await model.delete(model.seasons[0].episodes[0], allowRerecord: false).value
         #expect(model.seasons == before)
         #expect(model.problem == UserMessage(.unreachable("DIAG")))
         #expect(log.changes.isEmpty)
@@ -230,7 +236,7 @@ struct ShowViewModelTests {
 
     @Test func theRecordingIsGoneWhileAFailingDeleteIsStillInFlight() async throws {
         fake.suspend(.delete)
-        let task = model.delete(model.seasons[0].episodes[0])
+        let task = model.delete(model.seasons[0].episodes[0], allowRerecord: false)
         try await fake.waitForParked()
         #expect(isWatched(1) == nil)
         fake.releaseAll(throwing: .timedOut)
@@ -244,7 +250,7 @@ struct ShowViewModelTests {
         let ep = model.seasons[0].episodes[0]
         let toggle = model.toggleWatched(ep)
         try await fake.waitForParked()
-        await model.delete(ep).value  // fails at once; the episode comes back
+        await model.delete(ep, allowRerecord: false).value  // fails at once; the episode comes back
         #expect(isWatched(1) == true)
         fake.releaseAll()
         await toggle.value
@@ -253,8 +259,8 @@ struct ShowViewModelTests {
 
     @Test func deletingTheSameRecordingTwiceSendsOneCall() async {
         let ep = model.seasons[0].episodes[0]
-        let first = model.delete(ep)
-        let second = model.delete(ep)
+        let first = model.delete(ep, allowRerecord: false)
+        let second = model.delete(ep, allowRerecord: false)
         await first.value
         await second.value
         #expect(fake.calls == [.delete(rid(1), allowRerecord: false)])
@@ -262,7 +268,7 @@ struct ShowViewModelTests {
 
     @Test func deletingTheLastEpisodeOfTheSelectedSeasonSelectsTheFirstSeasonLeft() async {
         model.select(season: model.seasons[1])
-        await model.delete(model.seasons[1].episodes[0]).value
+        await model.delete(model.seasons[1].episodes[0], allowRerecord: false).value
         #expect(model.seasons.map(\.title) == ["Season 1", "Other Episodes"])
         #expect(model.selectedSeason?.id == 1)
     }
@@ -270,13 +276,13 @@ struct ShowViewModelTests {
     @Test func aFailedDeleteOfThatLastEpisodeBringsTheSeasonAndItsSelectionBack() async {
         model.select(season: model.seasons[1])
         fake.failNext(.timedOut, on: .delete)
-        await model.delete(model.seasons[1].episodes[0]).value
+        await model.delete(model.seasons[1].episodes[0], allowRerecord: false).value
         #expect(model.selectedSeason?.id == 2)
     }
 
     @Test func deletingTheLastRecordingOfTheShowMakesItEmptySoTheViewCanClose() async {
         let h = ShowViewModelTests(recordings: [episode(1)])
-        let task = h.model.delete(h.model.seasons[0].episodes[0])
+        let task = h.model.delete(h.model.seasons[0].episodes[0], allowRerecord: false)
         #expect(h.model.isEmpty)
         #expect(h.model.seasons.isEmpty)
         #expect(h.model.selectedSeason == nil)
@@ -288,7 +294,7 @@ struct ShowViewModelTests {
     @Test func aFailedDeleteOfTheLastRecordingMakesTheShowNonEmptyAgain() async {
         let h = ShowViewModelTests(recordings: [episode(1)])
         h.fake.failNext(.timedOut)
-        await h.model.delete(h.model.seasons[0].episodes[0]).value
+        await h.model.delete(h.model.seasons[0].episodes[0], allowRerecord: false).value
         #expect(!h.model.isEmpty)
         #expect(h.model.selectedSeason != nil)
     }
@@ -299,7 +305,7 @@ struct ShowViewModelTests {
             .fixture(id: rid(2), title: "Moonlit Road", kind: .movie, season: nil, episode: nil, seriesKey: nil),
         ])
         #expect(h.model.seasons.count == 1)
-        await h.model.delete(h.model.seasons[0].episodes[0]).value
+        await h.model.delete(h.model.seasons[0].episodes[0], allowRerecord: false).value
         #expect(h.model.seasons[0].episodes.count == 1)
     }
 

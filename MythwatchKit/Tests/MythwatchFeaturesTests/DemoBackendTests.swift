@@ -51,4 +51,18 @@ struct DemoBackendTests {
         #expect(session.engine.snapshot.duration == .seconds(7200))
         _ = await session.finish()
     }
+
+    /// M5-1: a seek to the end ends playback, as a real engine does, so the UI test can skip to
+    /// the end of a 30-minute episode and see the delete offer.
+    @Test func seekingToTheEndEndsPlaybackAndTheOutcomeReachedTheEnd() async throws {
+        let app = DemoBackend.appModel(backendSaved: true)
+        await app.connect()
+        let (episode, _) = try #require(DemoBackend.library().first { $0.0.title == "Garden Tales" })
+        let session = app.makePlaybackSession(episode, start: .beginning)
+        await session.start()
+        session.seek(to: .seconds(1800))
+        #expect(session.engine.snapshot.status == .ended)
+        let outcome = await app.finishPlayback(session)
+        #expect(outcome.reachedEnd)
+    }
 }

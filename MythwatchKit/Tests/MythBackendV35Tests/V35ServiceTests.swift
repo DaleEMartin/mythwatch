@@ -684,20 +684,19 @@ struct V35WriteTests {
         }
     }
 
-    @Test func deleteStillSendsNothingUntilM51() async {
+    /// Form fields from docs/BACKEND-V35.md, "DeleteRecording". `AllowRerecord` follows the caller.
+    @Test(arguments: [true, false])
+    func deleteRequestIsExact(_ allowRerecord: Bool) async throws {
         let t = FixtureTransport()
-        do {
-            try await recordingsService(t).delete(id: id, allowRerecord: false)
-            Issue.record("expected a throw")
-        } catch let error as BackendError {
-            guard case .rejected = error else {
-                Issue.record("expected .rejected, got \(error)")
-                return
-            }
-        } catch {
-            Issue.record("expected BackendError, got \(error)")
-        }
-        #expect(t.requests.isEmpty)
+        t.stub(.post, path: "/Dvr/DeleteRecording", body: try fixture("bool-true"))
+        try await recordingsService(t).delete(id: id, allowRerecord: allowRerecord)
+        let req = try #require(t.requests.first)
+        #expect(t.requests.count == 1)
+        #expect(req.method == .post)
+        #expect(path(req) == "/Dvr/DeleteRecording")
+        #expect(req.url.query == nil)
+        #expect(req.headers == formHeaders)
+        #expect(body(req) == "RecordedId=33&ForceDelete=false&AllowRerecord=\(allowRerecord)")
     }
 }
 
@@ -722,6 +721,9 @@ struct WriteCase: CustomTestStringConvertible, Sendable {
         },
         WriteCase(name: "clearBookmark", pathStub: "/Dvr/SetSavedBookmark") {
             try await PositionWrite.bookmark.run($0, nil, id: 1)
+        },
+        WriteCase(name: "delete", pathStub: "/Dvr/DeleteRecording") {
+            try await recordingsService($0).delete(id: RecordingID(rawValue: 1), allowRerecord: false)
         },
     ]
 }

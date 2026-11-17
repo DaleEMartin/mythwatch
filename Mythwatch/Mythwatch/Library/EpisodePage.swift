@@ -34,7 +34,8 @@ struct EpisodePage: View {
         playing = nil
         let model = self.model
         Task {
-            await app.finishPlayback(session)
+            let outcome = await app.finishPlayback(session)
+            model?.playbackFinished(outcome)
             await model?.load()
         }
     }
@@ -84,13 +85,26 @@ struct EpisodeDetailView: View {
         .task { await model.load() }
         .onChange(of: model.isDeleted) { _, deleted in if deleted { close() } }
         .confirmationDialog(
-            Labels.deleteQuestion(recording), isPresented: $confirmingDelete, titleVisibility: .visible
+            model.offersDelete ? Labels.finishedQuestion(recording) : Labels.deleteQuestion(recording),
+            isPresented: Binding(
+                get: { confirmingDelete || model.offersDelete },
+                set: { if !$0 { closeDialog() } }),
+            titleVisibility: .visible
         ) {
-            Button(Labels.delete, role: .destructive) { model.delete() }
-            Button(Labels.cancel, role: .cancel) {}
+            DeleteChoices(cancelTitle: model.offersDelete ? Labels.keep : Labels.cancel) {
+                closeDialog()
+                model.delete(allowRerecord: $0)
+            } cancel: {
+                closeDialog()
+            }
         } message: {
-            Text(Labels.deleteDetail)
+            Text(DeleteMessage.text(confirming: model.offersDelete || askBeforeDelete()))
         }
+    }
+
+    private func closeDialog() {
+        confirmingDelete = false
+        model.dismissDeleteOffer()
     }
 
     private var buttons: some View {
@@ -101,7 +115,7 @@ struct EpisodeDetailView: View {
             }
             if model.isLoading { ProgressView() }
             Button(role: .destructive) {
-                if askBeforeDelete() { confirmingDelete = true } else { model.delete() }
+                confirmingDelete = true  // always: the re-record choice is asked each time
             } label: {
                 Text(model.isDeleting ? Labels.deleting : Labels.delete)
             }

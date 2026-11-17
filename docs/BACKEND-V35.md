@@ -14,7 +14,7 @@ Each statement below is marked:
   recording (id 3749), M3-5, 2026-11-16.
 
 `UpdateRecordedWatchedStatus`, `SetLastPlayPos` and `SetSavedBookmark` are [live write].
-`DeleteRecording` is still [source] until M5-1.
+`DeleteRecording` is [live write] too (M5-1, 2026-11-16: 3749, and by the owner 622, 745, 1913).
 
 ## General
 
@@ -217,17 +217,28 @@ in (or leaves) `ProgramFlagNames` at once, from both `GetRecorded` and `GetRecor
 write] Returns `false` when the recording does not exist or has no file → `.rejected`. [source;
 not tried live: only the nominated recording may receive a POST]
 
-### `POST /Dvr/DeleteRecording` [source]
+### `POST /Dvr/DeleteRecording` [live write]
 
-**Not implemented until M5-1.** `V35RecordingsService.delete` sends no request and throws
-`BackendError.rejected("not implemented until M5-1")`.
-
-Form fields `RecordedId`, `ForceDelete=false`, `AllowRerecord=<bool>`. Returns `{"bool": true}`
-when the delete was **queued**; deletion is asynchronous. `false` → `.rejected`. Until it
+Implemented in M5-1 through `postExpectingTrue`, like every write. Form fields `RecordedId`, `ForceDelete=false`, `AllowRerecord=<bool>`. Returns `{"bool": true}`
+when the delete was **queued**; deletion is asynchronous. `false` → `.rejected` (the backend answers `false` when the recording has no channel or no file
+path). `AllowRerecord=true` makes the backend forget the recording in its history so the scheduler
+may record it again; the app asks the user each time. Until it
 completes, `GetRecorded` can still return the recording with the `DELETEPENDING` flag;
 `GetRecordedList` skips delete-pending rows. [source] Afterwards it may sit in the `Deleted`
 recording group, which `IgnoreDeleted=true` filters out.
 `POST /Dvr/UnDeleteRecording` exists; not used in v1.
+
+**Seen on basement** (M5-1, 2026-11-16, deletes from the app on the Apple TV with
+`AllowRerecord=false` for 3749): the reply is `{"bool": true}`, and the recording leaves
+`GetRecordedList` (`IgnoreDeleted=true`) at once. `DELETEPENDING` never appeared: this backend
+moves a deleted recording to the **`Deleted` recording group** with `AUTOEXP` added to
+`ProgramFlagNames`, and `GetRecorded` still returns it there (`RecGroup: "Deleted"`). The file
+stays until auto-expiry removes it, so mythfrontend can still undelete it. The `Deleted` group is
+the "auto-expire instead of delete" behaviour; a backend with it off deletes the file and may show
+`DELETEPENDING` meanwhile [source]. `FakeRecordingsService` models the second case; the app only
+relies on the recording leaving the list, which both cases share. `Myth/GetSetting` returned an
+empty string for `AutoExpireInsteadOfDelete` and `DeletedMaxAge`, so how long basement keeps the
+`Deleted` group was not read.
 
 ## Playback state
 
@@ -308,7 +319,7 @@ Every read goes through one helper (`V35Client`): `Accept: application/json`; HT
 ## Capabilities reported by the v35 adapter
 
 `.recordings`, `.resumePosition`, `.bookmarks`, `.commercialBreaks`, `.deleteRecording`.
-The adapter advertises `.deleteRecording` although `delete` is a stub until M5-1 (listed as the document says). The other write capabilities (`.resumePosition`, `.bookmarks`, and watched under `.recordings`) are implemented as of M3-5. `liveTV` and `videoLibrary` are nil.
+Every write capability is implemented: watched (under `.recordings`), `.resumePosition` and `.bookmarks` as of M3-5, `.deleteRecording` as of M5-1. `liveTV` and `videoLibrary` are nil.
 `supports(version)` is true for `major == 35` only.
 
 ## Known differences in later versions (for whoever writes the next adapter)

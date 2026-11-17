@@ -2,8 +2,7 @@ import Foundation
 import MythwatchBackend
 import MythwatchDomain
 
-/// `GetRecordedList` (paged), `GetRecorded` and `UpdateRecordedWatchedStatus`. `delete` is not
-/// implemented until M5-1 and sends no request.
+/// `GetRecordedList` (paged), `GetRecorded`, `UpdateRecordedWatchedStatus` and `DeleteRecording`.
 struct V35RecordingsService: RecordingsService {
     /// Page size from docs/BACKEND-V35.md, "Recordings".
     static let defaultPageSize = 200
@@ -61,12 +60,14 @@ struct V35RecordingsService: RecordingsService {
             form: [("RecordedId", String(id.rawValue)), ("Watched", watched ? "true" : "false")])
     }
 
+    /// `true` means the delete was queued; the backend deletes asynchronously and
+    /// `GetRecordedList` (with `IgnoreDeleted=true`) leaves the recording out meanwhile.
     func delete(id: RecordingID, allowRerecord: Bool) async throws {
-        throw V35NotImplemented.error
+        try await client.postExpectingTrue(
+            path: "/Dvr/DeleteRecording",
+            form: [
+                ("RecordedId", String(id.rawValue)), ("ForceDelete", "false"),
+                ("AllowRerecord", allowRerecord ? "true" : "false"),
+            ])
     }
-}
-
-/// What the `delete` stub throws, before any request is built.
-enum V35NotImplemented {
-    static let error = BackendError.rejected("not implemented until M5-1")
 }

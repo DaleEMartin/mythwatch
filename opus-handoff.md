@@ -53,7 +53,7 @@ I/O in package tests, the live-backend rule, spec changes travel with code, stay
 | ~~M3-4~~ | Done 2026-11-15. See `docs/ORCHESTRATION.md`. | |
 | ~~M3-5~~ | Done 2026-11-16. See `docs/ORCHESTRATION.md`. | |
 | ~~M4-3~~ | Done 2026-11-16. See `docs/ORCHESTRATION.md`. | |
-| **M5-1** | Delete | **A recording the owner nominates** |
+| ~~M5-1~~ | Done 2026-11-16. See `docs/ORCHESTRATION.md`. | |
 | **M5-2, M5-3, M5-4** | Bonjour discovery, states and accessibility, release documents | |
 
 M0-3 and M2-7 do not depend on each other. Do M0-3 first: if MPEG-2 playback through VLCKit is

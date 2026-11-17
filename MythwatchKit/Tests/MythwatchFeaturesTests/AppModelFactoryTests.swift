@@ -55,7 +55,7 @@ struct AppModelFactoryTests {
         let model = h.model.makeShowModel(show)
         #expect(model.show == show)
         await model.toggleWatched(model.seasons[0].episodes[0]).value
-        await model.delete(model.seasons[0].episodes[1]).value
+        await model.delete(model.seasons[0].episodes[1], allowRerecord: false).value
         #expect(h.adapter.recordingsFake.calls.suffix(2) == [
             .setWatched(true, rid(1)), .delete(rid(2), allowRerecord: false),
         ])
@@ -82,11 +82,11 @@ struct AppModelFactoryTests {
         let afterToggle = try #require(library.library.value?.shows.first { $0.title == "Garden Tales" })
         #expect(afterToggle.unwatchedCount == 1)
 
-        await model.delete(model.seasons[0].episodes[1]).value
+        await model.delete(model.seasons[0].episodes[1], allowRerecord: false).value
         #expect(library.library.value?.shows.first { $0.title == "Garden Tales" }?.episodeCount == 1)
         #expect(library.library.value?.recentlyRecorded.contains { $0.id == rid(2) } == false)
 
-        await model.delete(model.seasons[0].episodes[0]).value
+        await model.delete(model.seasons[0].episodes[0], allowRerecord: false).value
         #expect(library.library.value?.shows.map(\.title) == ["Harbour Lights"])
         // Nothing fetched the list again: the library was updated locally.
         #expect(h.adapter.recordingsFake.calls.filter { $0 == .allRecordings }.count == 1)
@@ -118,7 +118,7 @@ struct AppModelFactoryTests {
         let show = try #require(library.library.value?.shows.first { $0.title == "Garden Tales" })
         let showModel = h.model.makeShowModel(show)
         let detail = h.model.makeEpisodeDetailModel(recordings[0])
-        await detail.delete().value
+        await detail.delete(allowRerecord: false).value
         #expect(h.adapter.recordingsFake.calls.last == .delete(rid(1), allowRerecord: false))
         #expect(detail.isDeleted)
         #expect(showModel.show.recordings.map(\.id) == [rid(2)])
@@ -136,7 +136,7 @@ struct AppModelFactoryTests {
         #expect(weakShow == nil)
         // An episode page opened from a shelf, with no show page alive, still deletes.
         let detail = h.model.makeEpisodeDetailModel(recordings[2])
-        await detail.delete().value
+        await detail.delete(allowRerecord: false).value
         #expect(detail.isDeleted)
     }
 

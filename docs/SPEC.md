@@ -1020,8 +1020,8 @@ from the settings store, then:
 | View model | State | Actions |
 | --- | --- | --- |
 | `LibraryViewModel` | `library: Loadable<Library>`, `isRefreshing`, `refreshProblem: UserMessage?` | `load()`, `refresh()`, `reloadAfterPlayback()`, `apply(_ change: RecordingChange)` |
-| `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:)`, `dismissProblem()`, `apply(_ change: RecordingChange)` |
-| `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?`, `isDeleting`, `isDeleted` | `load()`, `delete()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
+| `ShowViewModel` | `show`, `seasons: [Season]`, `selectedSeason: Season?`, `isEmpty`, `problem: UserMessage?` | `select(season:)`, `toggleWatched(_:)`, `delete(_:allowRerecord:)`, `dismissProblem()`, `apply(_ change: RecordingChange)` |
+| `EpisodeDetailModel` | `recording`, `resumePosition: Duration?`, `bookmark: Duration?`, `startOptions: [StartOption]`, `isLoading`, `problem: UserMessage?`, `isDeleting`, `isDeleted`, `offersDelete` | `load()`, `delete(allowRerecord:)`, `playbackFinished(_ outcome: PlaybackOutcome)`, `dismissDeleteOffer()`; start points offered: Resume (if position), Play from Bookmark (if bookmark), Play from Beginning |
 | `SettingsViewModel` | `addressText`, `commercialSkipMode`, `skipForwardSeconds`, `skipBackwardSeconds`, `deinterlace`, `askBeforeDelete` (all editable); `connectionTest: Loadable<BackendInfo>`, `backendInfo`, `adapterName: String?`, `addressHint`, `discovered`, `canTestConnection`, `canSave`, `hasUnsavedChanges`, `isReconnecting`, `reconnectProblem: UserMessage?`, `editedSettings: AppSettings?` | `testConnection()`, `save()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
 | `OnboardingViewModel` | `addressText` (editable); `connectionTest`, `connectState: Loadable<BackendInfo>`, `adapterName`, `addressHint`, `discovered`, `canTestConnection`, `canConnect`, `isConnecting` | `testConnection()`, `connect()`, `select(_ backend:)`, `startDiscovery()`, `stopDiscovery()` |
 
@@ -1033,7 +1033,7 @@ EpisodeDetailModel(recording: Recording, state: any PlaybackStateService, record
 SettingsViewModel(settings: any SettingsStore, connector: BackendConnector, discovery: any BackendDiscovery,
                   session: @MainActor () -> Loadable<BackendSession>, reconnect: @MainActor () async -> Void)
 OnboardingViewModel(...)   // the same five parameters
-// toggleWatched(_:), delete(_:) and EpisodeDetailModel.delete() are `@discardableResult` and return Task<Void, Never>
+// toggleWatched(_:), delete(_:allowRerecord:) and EpisodeDetailModel.delete(allowRerecord:) are `@discardableResult` and return Task<Void, Never>
 public struct ArtworkURLs: Sendable {   // pure; asks the MediaLocator for URLs and sends nothing
     public init(media: any MediaLocator)
     public func poster(for show: Show, maxWidth: Int) -> [URL]
@@ -1095,8 +1095,9 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   wanted (on, off, on sends one write). A failed write returns the screen to the last
   confirmed state; an earlier failure never undoes a later toggle, and a later failure never
   rolls back past an earlier success. Writes to different recordings do not wait for each other.
-- `delete(_:)` sends `RecordingsService.delete(id:allowRerecord: false)`. The model has no
-  confirmation state: `askBeforeDelete` is the view's concern. A failed delete puts the recording
+- `delete(_:allowRerecord:)` sends `RecordingsService.delete(id:allowRerecord:)` with the
+  caller's choice (M5-1; owner, 2026-11-15: the user is asked each time). The model has no
+  confirmation state: the dialog is the view's concern. A failed delete puts the recording
   back in its place (newest first) with any watched change made meanwhile.
 - Consistency: after each *successful* write the show model calls its `onChange` closure with a
   `RecordingChange`. `AppModel.makeShowModel` wires it to the newest library model made by
@@ -1123,13 +1124,17 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   load keeps what an earlier load found.
 - Labels are "Resume from 12:34", "Play from Bookmark at 1:02:03" (whole seconds; hours only from
   one hour) and "Play from Beginning", built in `EpisodeLabels`.
-- **Delete** (owner, 2026-11-15). `delete()` sends `RecordingsService.delete(id:allowRerecord: false)`
-  and, unlike the show page, is not optimistic: the page closes when it succeeds, so a failure must
+- **Delete** (owner, 2026-11-15). `delete(allowRerecord:)` sends
+  `RecordingsService.delete(id:allowRerecord:)` with the caller's choice (M5-1) and, unlike the show page, is not optimistic: the page closes when it succeeds, so a failure must
   keep the page up to be seen. While it is in flight `isDeleting` is true and another `delete()`
-  joins it (nothing more is sent); after a success `isDeleted` is true, `onChange(.deleted(id))` is
+  joins it (nothing more is sent, whatever its choice); after a success `isDeleted` is true, `onChange(.deleted(id))` is
   called and later calls send nothing. A failure sets `problem` (which clears when the next delete or
   load starts) and leaves `isDeleted` false. The caller cannot cancel it. Confirming
   (`askBeforeDelete`) is the view's job; the view closes the page when `isDeleted` becomes true.
+- **Offer to delete after playback** (M5-1). The page passes the player's `PlaybackOutcome` to
+  `playbackFinished(_:)`. `offersDelete` becomes true when `reachedEnd` and the recording is
+  neither deleted nor being deleted, and false for any other outcome. `dismissDeleteOffer()` and
+  starting a delete clear it. It sends nothing; the view shows the offer as a dialog.
 
 **Transport rules** (`TransportModel`, M3-4)
 
@@ -1304,14 +1309,20 @@ stock control cannot do the job.
 | Root | No backend saved (`AppModel.savedSettings.backend == nil` while `session` is `.idle`): Onboarding. Otherwise `TabView` with Recordings and Settings. Once shown, Onboarding and its model stay until `connectState` is `.loaded` (a failed connect has already saved the address, §6.4). Tabs come from `capabilities` (Live TV and Videos appear when an adapter offers them). Root calls `connect()` once at launch. |
 | Onboarding | Discovered backends list, manual address field, Connect. Shows the detected version, or the unsupported-version message. |
 | Recordings | Vertical scroll: Continue Watching shelf (landscape cards with a part-watched mark; a progress bar needs each recording's position, which the list does not carry), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry; a failed refresh is a banner over the content. Refreshes when the app becomes active. A new `BackendSession.id` gives a new library model and an empty navigation stack. |
-| Show | Fanart header, season picker (several seasons; one named season is a heading; a film's unnamed season draws nothing), episode list (title, S/E, air date, duration, watched or part-watched mark). Context menu: Mark Watched/Unwatched, Delete (confirmed when `askBeforeDelete`). Closes when `isEmpty`. |
-| Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete (confirmed when `askBeforeDelete`). Closes when `isDeleted`. Reached from the shelves and from the show page. |
+| Show | Fanart header, season picker (several seasons; one named season is a heading; a film's unnamed season draws nothing), episode list (title, S/E, air date, duration, watched or part-watched mark). Context menu: Mark Watched/Unwatched, Delete (see "Delete dialog"). Closes when `isEmpty`. |
+| Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete (see "Delete dialog"). After playback that reached the end (`offersDelete`), the same dialog titled "You've finished "X". Delete it?" with Keep as its cancel button. Closes when `isDeleted`. Reached from the shelves and from the show page. |
 | Player | Full-screen video with our transport overlay, presented over the episode page by its start buttons. Binds to `TransportModel` (§6.4). See below. |
 | Settings | Backend (address, detected version, adapter, Test Connection), discovered backends, Playback (skip steps, deinterlace, ask before deleting), Commercials (mode), About (version, licences from the bundled `THIRD_PARTY_NOTICES.md`). Saves on leaving the tab when `canSave` (owner, 2026-11-15); the address hint shows while the text is invalid. Discovery runs while the screen is shown (also on Onboarding). |
 
 Screen wording that is not a `UserMessage`, an `addressHint` or a `StartOption.title` lives in one
 app file, `Shared/Labels.swift`. A page that makes its model on appear must put a view on screen
 before the model exists (an empty view never appears, so the model would never be made).
+
+**Delete dialog** (M5-1; owner, 2026-11-15 and 2026-11-16). Every Delete opens a dialog, whatever
+`askBeforeDelete` says, because whether MythTV may record the programme again is asked each time.
+Buttons: Delete (`allowRerecord: false`), Delete and Let MythTV Record It Again (`true`), Cancel.
+With `askBeforeDelete` on, the message warns that the delete can't be undone; with it off, it only
+explains the re-record choice. The buttons are built once (`DeleteChoices`) for both pages.
 
 **UI tests** (owner, 2026-11-15: the real fakes). `MythwatchTestSupport` is linked into the app for
 **Debug builds only**: the app target lists the package product, and its Release configuration sets
@@ -1414,7 +1425,7 @@ after cloning, before building the app.
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
-| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`. Its engine is a `FakePlayerEngine` that also reports each recording's length (from the stream URL), and the film "The Long Voyage" has three commercial breaks, one around its resume point, so resuming it skips a break at once (M4-3 UI test). Its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
+| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`. Its engine is a `FakePlayerEngine` that also reports each recording's length (from the stream URL), and the film "The Long Voyage" has three commercial breaks, one around its resume point, so resuming it skips a break at once (M4-3 UI test). A seek to a recording's length ends playback (`.ended`), as a real engine does (M5-1 UI test). Its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
 ### `FakePlayerEngine` rules
@@ -1526,8 +1537,7 @@ Tests of the fake live in `MythwatchPlaybackTests`, which depends on `MythwatchT
 The suite is version-neutral: it names no endpoint path or wire key, and knows an adapter only
 through `BackendAdapter` and the domain ports. It never calls a write method (`setWatched`,
 `delete`, `setResumePosition`, `setBookmark`); **write behaviour is outside the suite for now**,
-so an adapter that advertises a write capability whose method is still a stub (v35 `delete` until M5-1)
-is not in violation.
+so an adapter that advertises a write capability whose method is still a stub is not in violation.
 
 ```swift
 public protocol ConformanceScenario: Sendable {

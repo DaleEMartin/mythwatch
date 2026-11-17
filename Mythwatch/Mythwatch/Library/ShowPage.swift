@@ -64,15 +64,16 @@ struct ShowView: View {
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             titleVisibility: .visible, presenting: pendingDelete
         ) { recording in
-            Button(Labels.delete, role: .destructive) { model.delete(recording) }
-            Button(Labels.cancel, role: .cancel) {}
+            DeleteChoices { model.delete(recording, allowRerecord: $0) }
         } message: { _ in
-            Text(Labels.deleteDetail)
+            Text(DeleteMessage.text(confirming: askBeforeDelete()))
         }
     }
 
+    /// Always a dialog: the re-record choice is asked each time, even with `askBeforeDelete` off
+    /// (owner, 2026-11-16); the setting only drops the warning.
     private func requestDelete(_ recording: Recording) {
-        if askBeforeDelete() { pendingDelete = recording } else { model.delete(recording) }
+        pendingDelete = recording
     }
 
     private var header: some View {

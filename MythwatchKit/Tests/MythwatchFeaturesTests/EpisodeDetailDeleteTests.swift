@@ -1,6 +1,7 @@
 import Foundation
 import MythwatchDomain
 import MythwatchFeatures
+import MythwatchPlayback
 import MythwatchTestSupport
 import Testing
 
@@ -28,14 +29,26 @@ struct EpisodeDetailDeleteTests {
         #expect(!model.isDeleted)
     }
 
-    @Test func deleteSendsOneDeleteThatDoesNotAllowARerecord() async {
-        await model.delete().value
-        #expect(fake.calls == [.delete(rid(1), allowRerecord: false)])
+    @Test(arguments: [false, true])
+    func deleteSendsOneDeleteWithTheRerecordChoice(_ allowRerecord: Bool) async {
+        await model.delete(allowRerecord: allowRerecord).value
+        #expect(fake.calls == [.delete(rid(1), allowRerecord: allowRerecord)])
+    }
+
+    @Test func aSecondDeleteJoinsTheFirstAndItsChoiceStands() async throws {
+        fake.suspend(.delete)
+        let first = model.delete(allowRerecord: true)
+        try await fake.waitForParked(1, of: .delete)
+        let second = model.delete(allowRerecord: false)
+        fake.releaseAll()
+        await first.value
+        await second.value
+        #expect(fake.calls == [.delete(rid(1), allowRerecord: true)])
     }
 
     @Test func whileTheDeleteIsInFlightThePageIsDeletingButNotYetDeleted() async throws {
         fake.suspend(.delete)
-        let task = model.delete()
+        let task = model.delete(allowRerecord: false)
         try await fake.waitForParked(1, of: .delete)
         #expect(model.isDeleting)
         #expect(!model.isDeleted)
@@ -46,7 +59,7 @@ struct EpisodeDetailDeleteTests {
     }
 
     @Test func aSuccessfulDeleteMarksThePageDeletedAndReportsTheChange() async {
-        await model.delete().value
+        await model.delete(allowRerecord: false).value
         #expect(model.isDeleted)
         #expect(!model.isDeleting)
         #expect(model.problem == nil)
@@ -55,7 +68,7 @@ struct EpisodeDetailDeleteTests {
 
     @Test func aFailedDeleteKeepsThePageAndSaysWhyInPlainEnglish() async {
         fake.failNext(.rejected("DIAG"), on: .delete)
-        await model.delete().value
+        await model.delete(allowRerecord: false).value
         #expect(!model.isDeleted)
         #expect(!model.isDeleting)
         #expect(model.problem == UserMessage(.rejected("DIAG")))
@@ -64,9 +77,9 @@ struct EpisodeDetailDeleteTests {
 
     @Test func aSecondDeleteWhileOneIsInFlightSendsNothing() async throws {
         fake.suspend(.delete)
-        let first = model.delete()
+        let first = model.delete(allowRerecord: false)
         try await fake.waitForParked(1, of: .delete)
-        let second = model.delete()
+        let second = model.delete(allowRerecord: false)
         fake.releaseAll()
         await first.value
         await second.value
@@ -75,17 +88,17 @@ struct EpisodeDetailDeleteTests {
     }
 
     @Test func deleteAfterASuccessfulDeleteSendsNothing() async {
-        await model.delete().value
-        await model.delete().value
+        await model.delete(allowRerecord: false).value
+        await model.delete(allowRerecord: false).value
         #expect(fake.calls.count == 1)
     }
 
     @Test func aDeleteAfterAFailureTriesAgainAndClearsTheProblemWhenItStarts() async throws {
         fake.failNext(.timedOut, on: .delete)
-        await model.delete().value
+        await model.delete(allowRerecord: false).value
         #expect(model.problem != nil)
         fake.suspend(.delete)
-        let task = model.delete()
+        let task = model.delete(allowRerecord: false)
         #expect(model.problem == nil)
         try await fake.waitForParked(1, of: .delete)
         fake.releaseAll()
@@ -96,7 +109,7 @@ struct EpisodeDetailDeleteTests {
 
     @Test func cancellingTheCallerDoesNotCancelTheDelete() async throws {
         fake.suspend(.delete)
-        let caller = Task { await model.delete().value }
+        let caller = Task { await model.delete(allowRerecord: false).value }
         try await fake.waitForParked(1, of: .delete)
         caller.cancel()
         fake.releaseAll()
@@ -107,8 +120,67 @@ struct EpisodeDetailDeleteTests {
 
     @Test func aDeleteProblemIsClearedByTheNextLoadToo() async {
         fake.failNext(.timedOut, on: .delete)
-        await model.delete().value
+        await model.delete(allowRerecord: false).value
         await model.load()
         #expect(model.problem == nil)
+    }
+
+    // MARK: Offer to delete after playback (M5-1, owner 2026-11-16)
+
+    private func outcome(reachedEnd: Bool) -> PlaybackOutcome {
+        PlaybackOutcome(position: .seconds(60), reachedEnd: reachedEnd, markedWatched: reachedEnd)
+    }
+
+    @Test func nothingIsOfferedBeforePlayback() {
+        #expect(!model.offersDelete)
+    }
+
+    @Test func playbackThatReachedTheEndOffersADelete() {
+        model.playbackFinished(outcome(reachedEnd: true))
+        #expect(model.offersDelete)
+        #expect(fake.calls.isEmpty)
+    }
+
+    @Test func playbackThatStoppedEarlyOffersNothing() {
+        model.playbackFinished(outcome(reachedEnd: false))
+        #expect(!model.offersDelete)
+    }
+
+    @Test func decliningTheOfferClearsIt() {
+        model.playbackFinished(outcome(reachedEnd: true))
+        model.dismissDeleteOffer()
+        #expect(!model.offersDelete)
+        #expect(fake.calls.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func deletingClearsTheOfferAndSendsTheChoice(_ allowRerecord: Bool) async {
+        model.playbackFinished(outcome(reachedEnd: true))
+        let task = model.delete(allowRerecord: allowRerecord)
+        #expect(!model.offersDelete)
+        await task.value
+        #expect(fake.calls == [.delete(rid(1), allowRerecord: allowRerecord)])
+    }
+
+    @Test func aLaterPlaybackThatStoppedEarlyWithdrawsTheOffer() {
+        model.playbackFinished(outcome(reachedEnd: true))
+        model.playbackFinished(outcome(reachedEnd: false))
+        #expect(!model.offersDelete)
+    }
+
+    @Test func nothingIsOfferedOnceDeleted() async {
+        await model.delete(allowRerecord: false).value
+        model.playbackFinished(outcome(reachedEnd: true))
+        #expect(!model.offersDelete)
+    }
+
+    @Test func nothingIsOfferedWhileADeleteIsInFlight() async throws {
+        fake.suspend(.delete)
+        let task = model.delete(allowRerecord: false)
+        try await fake.waitForParked(1, of: .delete)
+        model.playbackFinished(outcome(reachedEnd: true))
+        #expect(!model.offersDelete)
+        fake.releaseAll()
+        await task.value
     }
 }

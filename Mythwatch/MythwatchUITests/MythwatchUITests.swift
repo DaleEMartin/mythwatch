@@ -150,6 +150,57 @@ final class MythwatchUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
     }
 
+    /// M5-1: Delete always asks, offering both re-record choices (owner, 2026-11-15/16). On the
+    /// fakes the delete succeeds and the page closes back to the show, without that episode.
+    @MainActor
+    func testDeleteOnTheEpisodePageOffersBothRerecordChoices() {
+        launch(backendSaved: true)
+        let title = openGardenEpisode()
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.delete"], limit: 4)
+        remote.press(.select)
+
+        XCTAssertTrue(dialogButton("Delete and Let MythTV Record It Again").waitForExistence(timeout: 5))
+        XCTAssertTrue(dialogButton("Delete").exists)
+        XCTAssertTrue(dialogButton("Cancel").exists)
+        attachScreenshot("10-delete-dialog")
+        // Focus starts on Cancel, at the bottom.
+        press(.up, untilFocusedLabel: "Delete and Let MythTV Record It Again")
+        remote.press(.select)
+
+        XCTAssertTrue(app.staticTexts["show.title"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["detail.title"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch.exists,
+                       "the deleted episode is gone from the show page")
+    }
+
+    /// M5-1: playing to the end (skipping forward until the demo engine ends) returns to the
+    /// episode page with an offer to delete; Keep leaves the recording alone.
+    @MainActor
+    func testWatchingToTheEndOffersADelete() {
+        launch(backendSaved: true)
+        _ = openGardenEpisode()
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.start.beginning"], limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+
+        // 30-minute episode, 30 s skips: at most 60 presses reach the end.
+        let player = app.otherElements["player.screen"]
+        for _ in 0..<70 where player.exists { remote.press(.right) }
+
+        let keep = dialogButton("Keep")
+        XCTAssertTrue(keep.waitForExistence(timeout: 5), "the delete offer shows after the end")
+        XCTAssertTrue(dialogButton("Delete and Let MythTV Record It Again").exists)
+        attachScreenshot("11-finished-offer")
+        press(.down, untilFocusedLabel: "Keep")  // already focused: Keep is the cancel button
+        remote.press(.select)
+
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: keep)
+        wait(for: [gone], timeout: 5)
+        XCTAssertTrue(app.staticTexts["detail.title"].exists, "Keep leaves the episode page up")
+    }
+
     @MainActor
     func testSettingsShowsTheConnectedBackend() {
         launch(backendSaved: true)
@@ -193,6 +244,43 @@ final class MythwatchUITests: XCTestCase {
     }
 
     // MARK: Focus helpers
+
+    /// A confirmation dialog's button by its label. tvOS shows the dialog as a sheet and lists
+    /// each of its buttons twice (an outer one that takes focus, and ours inside it).
+    private func dialogButton(_ label: String) -> XCUIElement {
+        app.sheets.firstMatch.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+    }
+
+    /// Presses `direction` until a button labelled `label` has focus.
+    private func press(
+        _ direction: XCUIRemote.Button, untilFocusedLabel label: String, limit: Int = 6,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let focused = app.sheets.firstMatch.buttons
+            .matching(NSPredicate(format: "label == %@ AND hasFocus == true", label)).firstMatch
+        for _ in 0..<limit {
+            if focused.exists { return }
+            remote.press(direction)
+        }
+        XCTAssertTrue(focused.exists, "could not focus \(label)", file: file, line: line)
+    }
+
+    /// From the library, opens Garden Tales and the first episode of its selected season.
+    /// Returns the episode's title as the page shows it.
+    private func openGardenEpisode() -> String {
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        press(.down, untilFocusedPrefix: "show.")
+        let garden = app.buttons["show.series:DEMO-GARDEN"]
+        for _ in 0..<6 where !garden.hasFocus { remote.press(.left) }
+        press(.right, until: garden, limit: 8)
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["show.title"].waitForExistence(timeout: 5))
+        remote.press(.down)
+        XCTAssertTrue(waitForFocus(prefix: "episode."))
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        return app.staticTexts["detail.title"].label
+    }
 
     private func waitForFocus(prefix: String, timeout: TimeInterval = 5) -> Bool {
         let predicate = NSPredicate(format: "hasFocus == true AND identifier BEGINSWITH %@", prefix)
