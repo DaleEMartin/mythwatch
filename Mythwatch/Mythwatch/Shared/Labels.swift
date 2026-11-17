@@ -108,6 +108,55 @@ enum Labels {
         return text + "."
     }
 
+    // VoiceOver (M5-3): one spoken label per card, poster and row, in words rather than symbols.
+
+    /// "Garden Tales, Autumn Harvest 1, Season 2, Episode 1, Part watched"; a film:
+    /// "The Long Voyage, 2 hours, Part watched".
+    static func spokenCard(_ r: Recording) -> String {
+        let second = episodeTitle(r) == r.title ? spokenLength(r) : episodeTitle(r)
+        return [r.title, second, spokenSeasonEpisode(r), watchState(r)].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    /// "Garden Tales, 7 episodes, 3 unwatched".
+    static func spokenShow(_ show: Show) -> String { "\(show.title), \(counts(show))" }
+
+    /// "Autumn Harvest 1, Season 2, Episode 1, First aired 26 Oct 2025, 30 minutes, Part watched".
+    static func spokenEpisodeRow(_ r: Recording) -> String {
+        let date = r.originalAirDate.flatMap(aired) ?? recordedDay(r)
+        return [episodeTitle(r), spokenSeasonEpisode(r), date, spokenLength(r), watchState(r)]
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+
+    /// "Season 2, Episode 1", "Episode 5", "Season 2", or nil.
+    static func spokenSeasonEpisode(_ r: Recording) -> String? {
+        let parts = [r.season.map { "Season \($0)" }, r.episode.map { "Episode \($0)" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// "45 minutes", "1 hour 30 minutes", "2 hours".
+    static func spokenLength(_ r: Recording) -> String {
+        let minutes = max(0, Int((r.recordingEnd.timeIntervalSince(r.recordingStart) / 60).rounded()))
+        let (h, m) = (minutes / 60, minutes % 60)
+        func unit(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
+        if h == 0 { return unit(m, "minute") }
+        return m == 0 ? unit(h, "hour") : unit(h, "hour") + " " + unit(m, "minute")
+    }
+
+    /// "Watched", "Part watched", or nil.
+    static func watchState(_ r: Recording) -> String? {
+        if r.flags.contains(.watched) { return watched }
+        if r.flags.contains(.hasResumePosition) { return partWatched }
+        return nil
+    }
+
+    /// The player's progress bar.
+    static let position = "Position"
+    /// "12:34 of 45:00", or just "12:34" without a length.
+    static func spokenPosition(_ elapsed: String, of duration: Duration?) -> String {
+        guard let duration, duration > .zero else { return elapsed }
+        return "\(elapsed) of \(TransportModel.timeText(duration))"
+    }
+
     // Recording details
 
     /// The line a list shows for a recording: its episode title, else the programme title.

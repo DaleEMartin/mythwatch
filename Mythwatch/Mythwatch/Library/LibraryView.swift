@@ -20,7 +20,7 @@ struct LibraryView: View {
             MessageView(message: message, retry: { await model.load() })
         case .loaded(let library) where library.shows.isEmpty:
             VStack(spacing: 24) {
-                if let problem = model.refreshProblem { MessageBanner(message: problem) }
+                refreshBanner
                 Text(Labels.noRecordingsTitle).font(.title2).bold()
                 Text(Labels.noRecordingsDetail).foregroundStyle(.secondary)
             }
@@ -30,7 +30,7 @@ struct LibraryView: View {
         case .loaded(let library):
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 50) {
-                    if let problem = model.refreshProblem { MessageBanner(message: problem) }
+                    if model.refreshProblem != nil { refreshBanner.padding(.horizontal, 80) }
                     if !library.continueWatching.isEmpty {
                         Shelf(title: Labels.continueWatching, id: "continueWatching",
                               recordings: library.continueWatching, artwork: artwork)
@@ -44,6 +44,13 @@ struct LibraryView: View {
                 .padding(.vertical, 40)
             }
             .accessibilityIdentifier("library.screen")
+        }
+    }
+
+    /// A failed refresh: the library stays, and Try Again fetches again (M5-3).
+    @ViewBuilder private var refreshBanner: some View {
+        if let problem = model.refreshProblem {
+            MessageBanner(message: problem, retry: problem.canRetry ? { await model.refresh() } : nil)
         }
     }
 }
@@ -65,6 +72,7 @@ struct Shelf: View {
                             RecordingCard(recording: recording, artwork: artwork)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel(Labels.spokenCard(recording))
                         .accessibilityIdentifier("card.\(id).\(recording.id.rawValue)")
                     }
                 }
@@ -89,6 +97,7 @@ struct RecordingCard: View {
                 urls: artwork.thumbnail(for: recording, maxWidth: 640), title: recording.title,
                 aspectRatio: 16.0 / 9.0
             )
+            .accessibilityHidden(true)
             .overlay(alignment: .bottomTrailing) { WatchMark(recording: recording).padding(12) }
             .frame(width: 400)
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -119,6 +128,7 @@ struct ShowsGrid: View {
                     NavigationLink(value: LibraryRoute.show(show)) {
                         VStack(alignment: .leading, spacing: 12) {
                             ArtworkImage(urls: artwork.poster(for: show, maxWidth: 320), title: show.title)
+                                .accessibilityHidden(true)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .hoverEffect(.highlight)
                             Text(show.title).font(.caption).bold().lineLimit(1)
@@ -126,6 +136,7 @@ struct ShowsGrid: View {
                         }
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel(Labels.spokenShow(show))
                     .accessibilityIdentifier("show.\(show.id)")
                 }
             }

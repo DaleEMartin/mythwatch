@@ -11,7 +11,14 @@ enum Composition {
     static func makeAppModel(arguments: [String] = ProcessInfo.processInfo.arguments) -> AppModel {
         #if DEBUG
         if arguments.contains("-MythwatchFakes") {
-            return DemoBackend.appModel(backendSaved: arguments.contains("-MythwatchFakesBackendSaved"))
+            // M5-3: what goes wrong in the demo, for the resilience UI tests.
+            let scenario: DemoBackend.Scenario =
+                arguments.contains("-MythwatchFakesEmpty") ? .emptyLibrary
+                : arguments.contains("-MythwatchFakesUnreachable") ? .unreachableAtLaunch
+                : arguments.contains("-MythwatchFakesOutage") ? .outage
+                : .normal
+            return DemoBackend.appModel(
+                backendSaved: arguments.contains("-MythwatchFakesBackendSaved"), scenario: scenario)
         }
         #endif
         var registry = AdapterRegistry()

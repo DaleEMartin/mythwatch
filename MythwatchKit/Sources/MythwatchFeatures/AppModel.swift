@@ -113,6 +113,14 @@ public struct BackendSession: Sendable, Identifiable {
         await task.value
     }
 
+    /// The app came back to the foreground (M5-3; owner, 2026-11-16: retry on return). After a
+    /// failed connect that trying again could fix, connects again; otherwise does nothing, so a
+    /// loaded session and the screens built on it stay as they are.
+    public func returnedToForeground() async {
+        guard let message = session.message, message.canRetry else { return }
+        await connect()
+    }
+
     /// The settings as stored now, read from the store on each access (not observed). Root
     /// decides Onboarding from `backend` (SPEC 7); pages read `askBeforeDelete`.
     public var savedSettings: AppSettings { settings.load() }

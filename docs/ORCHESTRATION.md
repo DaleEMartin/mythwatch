@@ -235,6 +235,21 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   TV** after a fresh install: Onboarding listed "basement", selecting it filled
   `basement.local:6544`, Connect loaded the library. No local-network permission prompt appeared
   (tvOS appears not to have that permission; the usage string stays for the iPhone app).
+- **M5-3 done and committed** (2026-11-17, direct Opus session, resumed after a reboot): states,
+  accessibility, resilience. `AppModel.returnedToForeground()` reconnects after a retryable failed
+  connect (Root calls it on background to active); `EpisodeDetailModel.canRetryLoad` puts Try Again
+  on the episode page's banner for a failed load only; the library's refresh banner has Try Again;
+  VoiceOver labels in `Labels` for cards, posters, rows and the player's position; Reduce Motion
+  fades the player panels. `DemoBackend.Scenario` (empty, unreachable at launch, outage) chosen by
+  launch arguments. Rules in SPEC 6.3 "Return to the foreground", 6.4 episode detail "Try Again",
+  7 "Accessibility" and "UI tests", 8 `DemoBackend`. Package: all 1066 tests pass (new suite
+  "EpisodeDetailModel retry", 8 tests; 6 in `AppModelTests`, 4 in `DemoBackendTests`). UI: 5 new
+  tests (empty library, unreachable at launch, lost backend, VoiceOver labels, largest text size).
+  **Known simulator problem:** in the full 14-test UI run, the last test's app launch fails with
+  Mach error -308 "(ipc/mig) server died" (2 of 2 runs); XCTest restarts and the test passes, but
+  xcodebuild reports TEST FAILED. Every test passes in shorter runs, and the pre-M5-3 suite (9
+  tests) succeeds, so it looks tied to the number of launches, not to a test. Not checked by the
+  owner with VoiceOver on a real Apple TV.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

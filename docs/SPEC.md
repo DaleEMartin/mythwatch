@@ -958,6 +958,7 @@ applied after trimming surrounding whitespace and newlines:
     public func makeOnboardingModel() -> OnboardingViewModel       // added by M2-6
     public func makeArtwork() -> ArtworkURLs                       // added by M2-7; needs a loaded session
     public var savedSettings: AppSettings { get }                  // added by M2-7; reads the store each time, not observed
+    public func returnedToForeground() async                       // added by M5-3; see "Return to the foreground"
 }
 public struct BackendSession: Sendable, Identifiable { let id: UUID; let info: BackendInfo; let adapter: any BackendAdapter; let adapterName: String }   // public init(info:adapter:adapterName:); id is new for every session made
 
@@ -1152,6 +1153,13 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   the mark, unless this page's own watched write to that recording is in flight (the page's newest
   wish wins). A recording the show does not have is ignored.
 
+**Return to the foreground** (M5-3; owner, 2026-11-16: retry on return). Root calls
+`AppModel.returnedToForeground()` when the scene goes from background to active (launch is left to
+Root's `connect()`). When `session` is `.failed` with a message whose `canRetry` is true, it calls
+`connect()`; in every other state (idle with or without a saved backend, connecting, loaded, or a
+failure that trying again cannot fix, such as an unsupported version) it does nothing and sends
+nothing, so a loaded session and the screens and navigation built on it stay as they are.
+
 **Episode detail rules** (`EpisodeDetailModel`)
 
 - `load()` fetches the resume position and the bookmark at the same time. `startOptions` are, in
@@ -1175,6 +1183,10 @@ without one is a programmer error and traps (`preconditionFailure`). The excepti
   `playbackFinished(_:)`. `offersDelete` becomes true when `reachedEnd` and the recording is
   neither deleted nor being deleted, and false for any other outcome. `dismissDeleteOffer()` and
   starting a delete clear it. It sends nothing; the view shows the offer as a dialog.
+- **Try Again** (M5-3). `canRetryLoad` is true while `problem` came from `load()` and its
+  `canRetry` is true; the view then shows Try Again on the page's banner, which calls `load()` and
+  leaves the viewer on the page. A problem from a failed delete never sets it (Delete is the
+  retry), and starting a delete clears it with the problem.
 
 **Transport rules** (`TransportModel`, M3-4)
 
@@ -1348,7 +1360,7 @@ stock control cannot do the job.
 | --- | --- |
 | Root | No backend saved (`AppModel.savedSettings.backend == nil` while `session` is `.idle`): Onboarding. Otherwise `TabView` with Recordings and Settings. Once shown, Onboarding and its model stay until `connectState` is `.loaded` (a failed connect has already saved the address, §6.4). Tabs come from `capabilities` (Live TV and Videos appear when an adapter offers them). Root calls `connect()` once at launch. |
 | Onboarding | Discovered backends list, manual address field, Connect. Shows the detected version, or the unsupported-version message. |
-| Recordings | Vertical scroll: Continue Watching shelf (landscape cards with a part-watched mark; a progress bar needs each recording's position, which the list does not carry), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry; a failed refresh is a banner over the content. Refreshes when the app becomes active. A new `BackendSession.id` gives a new library model and an empty navigation stack. |
+| Recordings | Vertical scroll: Continue Watching shelf (landscape cards with a part-watched mark; a progress bar needs each recording's position, which the list does not carry), Recently Recorded shelf, then a poster grid of shows. Loading, empty and error states with Retry; a failed refresh is a banner over the content, with Try Again (`refresh()`) when the message's `canRetry` (M5-3). Refreshes when the app becomes active. A new `BackendSession.id` gives a new library model and an empty navigation stack. |
 | Show | Fanart header, season picker (several seasons; one named season is a heading; a film's unnamed season draws nothing), episode list (title, S/E, air date, duration, watched or part-watched mark). Context menu: Mark Watched/Unwatched, Delete (see "Delete dialog"). Closes when `isEmpty`. |
 | Episode detail | Synopsis, channel, recorded date, buttons per `EpisodeDetailModel` start points, Delete (see "Delete dialog"). After playback that reached the end (`offersDelete`), the same dialog titled "You've finished "X". Delete it?" with Keep as its cancel button. Closes when `isDeleted`. Reached from the shelves and from the show page. |
 | Player | Full-screen video with our transport overlay, presented over the episode page by its start buttons. Binds to `TransportModel` (§6.4). See below. |
@@ -1364,13 +1376,24 @@ Buttons: Delete (`allowRerecord: false`), Delete and Let MythTV Record It Again 
 With `askBeforeDelete` on, the message warns that the delete can't be undone; with it off, it only
 explains the re-record choice. The buttons are built once (`DeleteChoices`) for both pages.
 
+**Accessibility** (M5-3). Each card, poster and episode row is one VoiceOver element with a label
+in words, built in `Labels` (`spokenCard`, `spokenShow`, `spokenEpisodeRow`): "Garden Tales,
+Autumn Harvest 1, Season 2, Episode 1, Part watched"; a film gives its length in place of an
+episode title ("The Long Voyage, 2 hours, Part watched"); a show gives its counts. Artwork,
+the video surface and decorative symbols are hidden from VoiceOver. The player's progress bar is
+one element labelled "Position" whose value is "12:34 of 45:00". Banners read as one element with
+their Try Again button beside it. With Reduce Motion on, the player's panels fade instead of
+sliding. Every screen must stay usable at the largest accessibility text size (UI test).
+
 **UI tests** (owner, 2026-11-15: the real fakes). `MythwatchTestSupport` is linked into the app for
 **Debug builds only**: the app target lists the package product, and its Release configuration sets
 `EXCLUDED_SOURCE_FILE_NAMES = MythwatchTestSupport.o`, which drops it from the Release link. The
 composition root imports it inside `#if DEBUG` only. Launched with `-MythwatchFakes`, a Debug build
 runs on `DemoBackend` (§8): fakes over an invented library, a probe answered by `FixtureTransport`,
 image URLs on a closed local port; nothing reaches a network backend. `-MythwatchFakesBackendSaved`
-starts with the demo address saved (tabs), without it on Onboarding. Checked in M2-7: the Release
+starts with the demo address saved (tabs), without it on Onboarding. For the M5-3 resilience tests,
+`-MythwatchFakesEmpty`, `-MythwatchFakesUnreachable` and `-MythwatchFakesOutage` pick a
+`DemoBackend.Scenario` (§8). Checked in M2-7: the Release
 product has no `MythwatchTestSupport` symbols (`nm`) and links no extra library (`otool -L`).
 The UI tests drive the remote (`XCUIRemote`) and find views by accessibility identifier.
 `testLiveWalkthroughTakesScreenshots` runs only with `TEST_RUNNER_MYTHWATCH_LIVE_UI=1` against the
@@ -1465,7 +1488,7 @@ after cloning, before building the app.
 | `TestClock` | `@MainActor` class: `now` is a `@MainActor () -> ContinuousClock.Instant`; `advance(by:)` moves it. The origin is one `ContinuousClock.now` reading taken at `init` (the type has no public initialiser); nothing else reads real time |
 | `InMemorySettingsStore`, `FakeBackendDiscovery` | Settings kept in memory with `saveCount`, `loadCount` and `saved`; discovery driven by `push(_:)` (rules below) |
 | `Recording.fixture(...)` | Builder with defaults for every field |
-| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:)`. Its engine is a `FakePlayerEngine` that also reports each recording's length (from the stream URL), and the film "The Long Voyage" has three commercial breaks, one around its resume point, so resuming it skips a break at once (M4-3 UI test). A seek to a recording's length ends playback (`.ended`), as a real engine does (M5-1 UI test). Its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
+| `DemoBackend` | `@MainActor` builder of a whole `AppModel` over the fakes with an invented library (series over two seasons, a film, a show without season numbers, watched and part-watched recordings), for the app's UI tests and screenshots (§7 "UI tests"). `appModel(backendSaved:scenario:)`; `Scenario` is `.normal` (the default), `.emptyLibrary` (no recordings), `.unreachableAtLaunch` (the first connect's probe fails with `.unreachable`, every later one works) or `.outage` (once an episode page asks for a position, its first two position fetches fail with `.unreachable`, then the next library fetch fails once; after that everything answers). Its engine is a `FakePlayerEngine` that also reports each recording's length (from the stream URL), and the film "The Long Voyage" has three commercial breaks, one around its resume point, so resuming it skips a break at once (M4-3 UI test). A seek to a recording's length ends playback (`.ended`), as a real engine does (M5-1 UI test). Its probe stubs are the only probe paths outside `MythwatchBackend` and the tests |
 | `FixtureLoader` | `data(named:in:subdirectory:)` and `decode(_:named:in:subdirectory:)` read a file from a `Bundle` the caller passes (its own `Bundle.module`). A `named` without an extension means `.json`; a name with one (`not-found.html`) is used as given. A missing or unreadable file throws `FixtureError` whose description names the file |
 
 ### `FakePlayerEngine` rules

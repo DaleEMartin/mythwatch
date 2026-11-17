@@ -62,6 +62,7 @@ struct EpisodeDetailView: View {
         HStack(alignment: .top, spacing: 70) {
             ArtworkImage(urls: artwork.thumbnail(for: recording, maxWidth: 1280), title: recording.title,
                          aspectRatio: 16.0 / 9.0)
+                .accessibilityHidden(true)
                 .frame(width: 720)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             VStack(alignment: .leading, spacing: 20) {
@@ -74,7 +75,10 @@ struct EpisodeDetailView: View {
                 if let synopsis = recording.synopsis, !synopsis.isEmpty {
                     Text(synopsis).lineLimit(6)
                 }
-                if let problem = model.problem { MessageBanner(message: problem) }
+                // Try Again only for a failed load (M5-3); a failed delete is retried with Delete.
+                if let problem = model.problem {
+                    MessageBanner(message: problem, retry: model.canRetryLoad ? { await model.load() } : nil)
+                }
                 buttons.padding(.top, 20)
             }
         }

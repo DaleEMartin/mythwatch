@@ -378,4 +378,67 @@ struct AppModelScreenStateTests {
         let session = try #require(h.session)
         #expect(h.model.session.value?.id == session.id)
     }
+
+    // MARK: Returning to the app (M5-3; owner, 2026-11-16: retry on return)
+
+    private func failFirstConnect(_ h: Harness) async {
+        h.transport.parkNext("alpha")
+        let task = Task { await h.model.connect() }
+        await h.transport.waitForParked()
+        h.transport.releaseNext("alpha", throwing: BackendError.unreachable("DIAG down"))
+        await task.value
+    }
+
+    @Test func returningAfterAFailedConnectConnectsAgain() async throws {
+        let h = Harness()
+        await failFirstConnect(h)
+        #expect(h.model.session.message != nil)
+        await h.model.returnedToForeground()
+        #expect(h.session != nil)
+        #expect(h.transport.probeCount == 2)
+    }
+
+    @Test func returningWhileConnectedSendsNothingAndKeepsTheSession() async throws {
+        let h = Harness()
+        await h.model.connect()
+        let id = try #require(h.session).id
+        await h.model.returnedToForeground()
+        #expect(h.transport.probeCount == 1)
+        #expect(h.session?.id == id)
+    }
+
+    @Test func returningWithNoBackendSavedSendsNothing() async {
+        let h = Harness(backend: nil)
+        await h.model.connect()
+        await h.model.returnedToForeground()
+        #expect(h.model.session.isIdle)
+        #expect(h.transport.requests.isEmpty)
+    }
+
+    @Test func returningBeforeTheFirstConnectSendsNothing() async {
+        let h = Harness()
+        await h.model.returnedToForeground()
+        #expect(h.model.session.isIdle)
+        #expect(h.transport.requests.isEmpty)
+    }
+
+    @Test func returningWhileConnectingDoesNotProbeAgain() async {
+        let h = Harness()
+        h.transport.parkNext("alpha")
+        let task = Task { await h.model.connect() }
+        await h.transport.waitForParked()
+        await h.model.returnedToForeground()
+        #expect(h.model.session.isLoading)
+        h.transport.releaseNext("alpha")
+        await task.value
+        #expect(h.transport.probeCount == 1)
+    }
+
+    @Test func returningAfterAnUnsupportedVersionDoesNotRetry() async {
+        let h = Harness(registerFactories: false)
+        await h.model.connect()
+        #expect(h.model.session.message?.canRetry == false)
+        await h.model.returnedToForeground()
+        #expect(h.transport.probeCount == 1)
+    }
 }

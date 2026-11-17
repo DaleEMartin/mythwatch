@@ -10,6 +10,7 @@ import SwiftUI
 struct RootView: View {
     let app: AppModel
     @State private var onboarding: OnboardingViewModel?
+    @Environment(\.scenePhase) private var scenePhase
 
     private var needsSetup: Bool { app.session.isIdle && app.savedSettings.backend == nil }
 
@@ -30,6 +31,12 @@ struct RootView: View {
             if connected { onboarding = nil }
         }
         .task { await app.connect() }
+        // Back from the background (the Apple TV woke, or the viewer switched back): a failed
+        // connection is tried again (M5-3; owner, 2026-11-16). Launch (inactive to active) is
+        // left to the `.task` above.
+        .onChange(of: scenePhase) { old, new in
+            if old == .background && new == .active { Task { await app.returnedToForeground() } }
+        }
     }
 }
 

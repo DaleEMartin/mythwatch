@@ -65,4 +65,63 @@ struct DemoBackendTests {
         let outcome = await app.finishPlayback(session)
         #expect(outcome.reachedEnd)
     }
+
+    // MARK: Scenarios for the M5-3 UI tests
+
+    @Test func theEmptyScenarioConnectsToABackendWithNoRecordings() async throws {
+        let app = DemoBackend.appModel(backendSaved: true, scenario: .emptyLibrary)
+        await app.connect()
+        let library = app.makeLibraryModel()
+        await library.load()
+        let value = try #require(library.library.value)
+        #expect(value.shows.isEmpty)
+        #expect(value.continueWatching.isEmpty)
+    }
+
+    @Test func theUnreachableScenarioFailsTheFirstConnectAndTheNextOneWorks() async throws {
+        let app = DemoBackend.appModel(backendSaved: true, scenario: .unreachableAtLaunch)
+        await app.connect()
+        let message = try #require(app.session.message)
+        #expect(message.title == UserMessage(.unreachable("")).title)
+        #expect(message.canRetry)
+        await app.connect()
+        #expect(app.session.value != nil)
+    }
+
+    /// The outage begins when an episode page first fetches its positions: those fetches fail,
+    /// and so does the next library fetch; after that the backend answers again.
+    @Test func theOutageScenarioFailsAnEpisodePageAndTheNextRefreshThenRecovers() async throws {
+        let app = DemoBackend.appModel(backendSaved: true, scenario: .outage)
+        await app.connect()
+        let library = app.makeLibraryModel()
+        await library.load()
+        #expect(library.library.value != nil)
+
+        let (episode, resume) = try #require(DemoBackend.library().first { $0.1 != nil })
+        let page = app.makeEpisodeDetailModel(episode)
+        await page.load()
+        #expect(page.canRetryLoad)
+        await page.load()
+        #expect(page.problem == nil)
+        #expect(page.resumePosition == resume)
+
+        await library.refresh()
+        #expect(library.refreshProblem?.canRetry == true)
+        #expect(library.library.value != nil)
+        await library.refresh()
+        #expect(library.refreshProblem == nil)
+    }
+
+    @Test func withoutAScenarioNothingFails() async throws {
+        let app = DemoBackend.appModel(backendSaved: true)
+        await app.connect()
+        let library = app.makeLibraryModel()
+        await library.load()
+        let (episode, _) = try #require(DemoBackend.library().first { $0.1 != nil })
+        let page = app.makeEpisodeDetailModel(episode)
+        await page.load()
+        #expect(page.problem == nil)
+        await library.refresh()
+        #expect(library.refreshProblem == nil)
+    }
 }

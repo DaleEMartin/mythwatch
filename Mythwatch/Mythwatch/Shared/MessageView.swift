@@ -31,21 +31,33 @@ struct MessageView: View {
     }
 }
 
-/// A message shown inside a screen that keeps its content: a banner line.
+/// A message shown inside a screen that keeps its content: a banner line, with Try Again when
+/// the caller passes `retry` (only when the message's `canRetry`, or the model's own flag, says
+/// it can help). Retrying leaves the viewer where they are (M5-3).
 struct MessageBanner: View {
     let message: UserMessage
+    var retry: (() async -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(message.title).font(.headline)
-                Text(message.detail).font(.callout).foregroundStyle(.secondary)
+        HStack(alignment: .center, spacing: 30) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(message.title).font(.headline)
+                    Text(message.detail).font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            if let retry {
+                Button(Labels.tryAgain) { Task { await retry() } }
+                    .accessibilityIdentifier("message.banner.retry")
             }
         }
         .padding(24)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .combine)
+        .focusSection()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("message.banner")
     }
 }

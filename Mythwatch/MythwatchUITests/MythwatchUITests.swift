@@ -7,9 +7,9 @@ final class MythwatchUITests: XCTestCase {
     private let app = XCUIApplication()
     private var remote: XCUIRemote { XCUIRemote.shared }
 
-    private func launch(backendSaved: Bool) {
+    private func launch(backendSaved: Bool, extra: [String] = []) {
         continueAfterFailure = false
-        app.launchArguments = ["-MythwatchFakes"] + (backendSaved ? ["-MythwatchFakesBackendSaved"] : [])
+        app.launchArguments = ["-MythwatchFakes"] + (backendSaved ? ["-MythwatchFakesBackendSaved"] : []) + extra
         app.launch()
     }
 
@@ -209,6 +209,131 @@ final class MythwatchUITests: XCTestCase {
         XCTAssertTrue(app.textFields["address.field"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["address.field"].value as? String, "demo-backend:6544")
         attachScreenshot("6-settings")
+    }
+
+    // MARK: States and resilience (M5-3)
+
+    @MainActor
+    func testAnEmptyLibrarySaysSo() {
+        launch(backendSaved: true, extra: ["-MythwatchFakesEmpty"])
+        XCTAssertTrue(app.otherElements["library.empty"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["No Recordings Yet"].exists)
+        attachScreenshot("12-empty-library")
+    }
+
+    /// Acceptance item 9 on the fakes: the backend is off at launch, Try Again recovers.
+    @MainActor
+    func testUnreachableAtLaunchShowsTryAgainWhichRecovers() {
+        launch(backendSaved: true, extra: ["-MythwatchFakesUnreachable"])
+        XCTAssertTrue(app.otherElements["message.screen"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Can't Reach Your MythTV Backend"].exists)
+        attachScreenshot("13-unreachable")
+        let retry = app.buttons["message.retry"]
+        press(.down, until: retry, limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.otherElements["message.screen"].exists)
+    }
+
+    /// The backend drops while the viewer is on an episode page, and again for the library's
+    /// refresh after playback. Each problem shows as a banner with Try Again, which recovers
+    /// without leaving the page.
+    @MainActor
+    func testALostBackendIsRetriedWithoutLeavingThePage() {
+        launch(backendSaved: true, extra: ["-MythwatchFakesOutage"])
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        // Garden Tales S2 E1 (105) has a resume position.
+        press(.down, untilFocusedPrefix: "card.continueWatching.")
+        for _ in 0..<3 { remote.press(.left) }
+        press(.right, untilFocusedPrefix: "card.continueWatching.105", limit: 4)
+        remote.press(.select)
+
+        let title = app.staticTexts["detail.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let episodeTitle = title.label
+        let pageRetry = app.buttons["message.banner.retry"]
+        XCTAssertTrue(pageRetry.waitForExistence(timeout: 5), "the failed load shows a banner with Try Again")
+        XCTAssertFalse(app.buttons["detail.start.resume"].exists)
+        attachScreenshot("14-episode-outage")
+        press(.up, until: pageRetry, limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.buttons["detail.start.resume"].waitForExistence(timeout: 5), "the retry found the position")
+        XCTAssertFalse(app.otherElements["message.banner"].exists)
+        XCTAssertEqual(title.label, episodeTitle, "still on the same page")
+
+        // Play and leave: the library's reload after playback fails, and the library keeps its content.
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.start.beginning"], limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        remote.press(.menu)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        remote.press(.menu)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 5))
+        let libraryRetry = app.buttons["message.banner.retry"]
+        XCTAssertTrue(libraryRetry.waitForExistence(timeout: 5), "the failed refresh shows a banner with Try Again")
+        XCTAssertTrue(app.descendants(matching: .any)["shelf.continueWatching"].exists, "the library stays")
+        attachScreenshot("15-library-outage")
+        press(.up, until: libraryRetry, limit: 6)
+        remote.press(.select)
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.otherElements["message.banner"])
+        wait(for: [gone], timeout: 5)
+        XCTAssertTrue(app.scrollViews["library.screen"].exists)
+    }
+
+    /// VoiceOver reads one plain label per card, poster and episode row.
+    @MainActor
+    func testVoiceOverLabelsDescribeCardsPostersAndRows() {
+        launch(backendSaved: true)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["card.continueWatching.105"].label,
+                       "Garden Tales, Autumn Harvest 1, Season 2, Episode 1, Part watched")
+        XCTAssertEqual(app.buttons["card.continueWatching.113"].label, "The Long Voyage, 2 hours, Part watched")
+
+        // The grid is lazy: its posters exist once focus has scrolled to them.
+        press(.down, untilFocusedPrefix: "show.")
+        let garden = app.buttons["show.series:DEMO-GARDEN"]
+        for _ in 0..<6 where !garden.hasFocus { remote.press(.left) }
+        press(.right, until: garden, limit: 8)
+        XCTAssertEqual(garden.label, "Garden Tales, 7 episodes, 5 unwatched")
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["show.title"].waitForExistence(timeout: 5))
+        let row = app.buttons["episode.101"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.label.hasPrefix("Spring Planting 1, Season 1, Episode 1, First aired "), row.label)
+        XCTAssertTrue(row.label.hasSuffix(", 30 minutes, Watched"), row.label)
+    }
+
+    /// Large text: every screen at the largest accessibility text size, for screenshots. The
+    /// screens must still be reachable and their controls present.
+    @MainActor
+    func testEveryScreenAtTheLargestTextSize() {
+        launch(backendSaved: true, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        attachScreenshot("large-1-library")
+        press(.down, untilFocusedPrefix: "show.")
+        attachScreenshot("large-2-grid")
+        _ = openGardenEpisode()
+        XCTAssertTrue(app.buttons["detail.start.beginning"].exists)
+        XCTAssertTrue(app.buttons["detail.delete"].exists)
+        attachScreenshot("large-4-episode")
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.start.beginning"], limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.otherElements["player.transport"].waitForExistence(timeout: 5))
+        remote.press(.playPause)
+        attachScreenshot("large-5-player")
+        remote.press(.menu)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        remote.press(.menu)
+        XCTAssertTrue(app.staticTexts["show.title"].waitForExistence(timeout: 5))
+        attachScreenshot("large-3-show")
+        remote.press(.menu)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 5))
+        for _ in 0..<8 { remote.press(.up) }
+        remote.press(.right)
+        XCTAssertTrue(app.textFields["address.field"].waitForExistence(timeout: 5))
+        attachScreenshot("large-6-settings")
     }
 
     /// Screenshots against a real backend whose address is already saved in the app's settings.

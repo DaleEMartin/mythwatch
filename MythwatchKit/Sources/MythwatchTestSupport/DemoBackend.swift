@@ -3,6 +3,7 @@ import MythwatchBackend
 import MythwatchDomain
 import MythwatchFeatures
 import MythwatchPlayback
+import Synchronization
 
 /// A whole `AppModel` over the fakes, with a small invented library, for the app's UI tests and
 /// for screenshots (SPEC 7 "UI tests"). The app builds it only in debug builds, when launched
@@ -16,12 +17,26 @@ public enum DemoBackend {
     public static let hostName = "demo-backend"
     public static let adapterName = "Demo backend"
 
+    /// What goes wrong, for the M5-3 UI tests. The app picks one from a launch argument (SPEC 7
+    /// "UI tests").
+    public enum Scenario: Sendable {
+        /// Everything works.
+        case normal
+        /// A backend with no recordings.
+        case emptyLibrary
+        /// The first connect cannot reach the backend; every later one works.
+        case unreachableAtLaunch
+        /// The backend drops when an episode page first fetches its positions: those fetches
+        /// fail, and so does the next library fetch. After that it answers again.
+        case outage
+    }
+
     /// An `AppModel` over fakes. With `backendSaved` the settings already hold `connection`
     /// (the app opens on the tabs); without it the app opens on Onboarding.
-    public static func appModel(backendSaved: Bool) -> AppModel {
+    public static func appModel(backendSaved: Bool, scenario: Scenario = .normal) -> AppModel {
         let adapter = FakeBackendAdapter(baseURL: URL(string: "http://127.0.0.1:9")!)
         var lengths: [String: Duration] = [:]
-        for (recording, resume) in library() {
+        for (recording, resume) in scenario == .emptyLibrary ? [] : library() {
             adapter.store.add(recording, resumePosition: resume, commercialBreaks: commercialBreaks(for: recording))
             let seconds = recording.recordingEnd.timeIntervalSince(recording.recordingStart)
             lengths[String(recording.id.rawValue)] = .seconds(Int(seconds))
@@ -32,13 +47,19 @@ public enum DemoBackend {
         transport.stub(.get, path: "/Myth/GetBackendInfo", body: #"{"BackendInfo": {"Build": {"Version": "v35.0"}}}"#)
         transport.stub(.get, path: "/Myth/GetHostName", body: #"{"String": "\#(hostName)"}"#)
         var registry = AdapterRegistry()
-        registry.register(FakeAdapterFactory(name: adapterName, adapter: adapter))
+        if scenario == .outage {
+            registry.register(OutageAdapterFactory(adapter: OutageAdapter(inner: adapter), name: adapterName))
+        } else {
+            registry.register(FakeAdapterFactory(name: adapterName, adapter: adapter))
+        }
 
         let discovery = FakeBackendDiscovery()
         discovery.push([DiscoveredBackend(id: hostName, name: "Demo Backend", connection: connection)])
         return AppModel(
             settings: InMemorySettingsStore(AppSettings(backend: backendSaved ? connection : nil)),
-            connector: BackendConnector(registry: registry, transport: transport),
+            connector: BackendConnector(
+                registry: registry,
+                transport: scenario == .unreachableAtLaunch ? FirstProbeFails(inner: transport) : transport),
             makeEngine: { DemoPlayerEngine(lengths: lengths) },
             discovery: discovery,
             now: { ContinuousClock.now })
@@ -142,4 +163,102 @@ public enum DemoBackend {
         get { inner.selectedSubtitleTrack }
         set { inner.selectedSubtitleTrack = newValue }
     }
+}
+
+// MARK: - Scenario helpers (M5-3)
+
+/// Fails the first probe request with `.unreachable`, as a backend that is switched off would,
+/// then passes every request to `inner`.
+final class FirstProbeFails: HTTPTransport {
+    private let inner: any HTTPTransport
+    private let failed = Mutex(false)
+
+    init(inner: any HTTPTransport) { self.inner = inner }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let fail = failed.withLock { done in
+            defer { done = true }
+            return !done
+        }
+        if fail { throw BackendError.unreachable("DemoBackend: switched off for the first connect") }
+        return try await inner.send(request)
+    }
+}
+
+/// `DemoBackend.Scenario.outage`: the fake adapter, with its recordings and playback state
+/// failing for a while once an episode page has asked for a position.
+final class OutageAdapter: BackendAdapter, RecordingsService, PlaybackStateService {
+    private struct Outage {
+        var started = false
+        var positionFailuresLeft = 2
+        var libraryFailuresLeft = 1
+    }
+
+    private let inner: FakeBackendAdapter
+    private let outage = Mutex(Outage())
+
+    init(inner: FakeBackendAdapter) { self.inner = inner }
+
+    var version: BackendVersion { inner.version }
+    var capabilities: BackendCapabilities { inner.capabilities }
+    var recordings: any RecordingsService { self }
+    var playbackState: any PlaybackStateService { self }
+    var markup: any MarkupService { inner.markup }
+    var media: any MediaLocator { inner.media }
+    var liveTV: (any LiveTVService)? { nil }
+    var videoLibrary: (any VideoLibraryService)? { nil }
+
+    private static let down = BackendError.unreachable("DemoBackend: outage")
+
+    private func positionFetch() throws {
+        let fail = outage.withLock { o in
+            o.started = true
+            guard o.positionFailuresLeft > 0 else { return false }
+            o.positionFailuresLeft -= 1
+            return true
+        }
+        if fail { throw Self.down }
+    }
+
+    func allRecordings() async throws -> [Recording] {
+        let fail = outage.withLock { o in
+            guard o.started, o.libraryFailuresLeft > 0 else { return false }
+            o.libraryFailuresLeft -= 1
+            return true
+        }
+        if fail { throw Self.down }
+        return try await inner.recordings.allRecordings()
+    }
+
+    func recording(id: RecordingID) async throws -> Recording { try await inner.recordings.recording(id: id) }
+    func setWatched(_ watched: Bool, id: RecordingID) async throws {
+        try await inner.recordings.setWatched(watched, id: id)
+    }
+    func delete(id: RecordingID, allowRerecord: Bool) async throws {
+        try await inner.recordings.delete(id: id, allowRerecord: allowRerecord)
+    }
+
+    func resumePosition(for id: RecordingID) async throws -> Duration? {
+        try positionFetch()
+        return try await inner.playbackState.resumePosition(for: id)
+    }
+    func setResumePosition(_ position: Duration?, for id: RecordingID) async throws {
+        try await inner.playbackState.setResumePosition(position, for: id)
+    }
+    func bookmark(for id: RecordingID) async throws -> Duration? {
+        try positionFetch()
+        return try await inner.playbackState.bookmark(for: id)
+    }
+    func setBookmark(_ position: Duration?, for id: RecordingID) async throws {
+        try await inner.playbackState.setBookmark(position, for: id)
+    }
+}
+
+struct OutageAdapterFactory: BackendAdapterFactory {
+    let adapter: OutageAdapter
+    let name: String
+    func supports(_ version: BackendVersion) -> Bool { true }
+    func makeAdapter(
+        connection: BackendConnection, version: BackendVersion, transport: any HTTPTransport
+    ) -> any BackendAdapter { adapter }
 }

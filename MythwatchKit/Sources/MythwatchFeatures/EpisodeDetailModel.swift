@@ -56,6 +56,9 @@ enum EpisodeLabels {
 /// is neither deleted nor being deleted; the view then asks whether to delete it. Any other
 /// outcome, `dismissDeleteOffer()` and starting a delete clear it.
 ///
+/// `canRetryLoad` is true while `problem` came from `load()` and says trying again could help; the
+/// view then offers Try Again (`load()`). A failed delete is retried with Delete, not reloaded.
+///
 /// A concurrent `load()` joins the one running. If every caller waiting is cancelled the load is
 /// cancelled and publishes nothing: no message, `isLoading` back to false, the positions as they
 /// were before it started (none, after a first load).
@@ -70,6 +73,10 @@ enum EpisodeLabels {
     public private(set) var isDeleted = false
     /// Playback just reached the end: the view should offer to delete the recording.
     public private(set) var offersDelete = false
+    /// The problem came from loading the positions and trying again could fix it: the view
+    /// offers Try Again, which calls `load()` (M5-3). False for a failed delete.
+    public var canRetryLoad: Bool { problemIsFromLoad && problem?.canRetry == true }
+    @ObservationIgnored private var problemIsFromLoad = false
 
     @ObservationIgnored private let state: any PlaybackStateService
     @ObservationIgnored private let recordings: any RecordingsService
@@ -110,6 +117,7 @@ enum EpisodeLabels {
                 onChange?(.deleted(id))
             } catch {
                 problem = UserMessage.describing(error)
+                problemIsFromLoad = false
             }
             isDeleting = false
             deleteTask = nil
@@ -180,6 +188,7 @@ enum EpisodeLabels {
         case .failure(let error): firstFailure = firstFailure ?? error
         }
         problem = firstFailure.map(UserMessage.describing)
+        problemIsFromLoad = true
     }
 
     private static func usable(_ position: Duration?) -> Duration? {

@@ -62,10 +62,11 @@ private struct PlayerContent: View {
     let nowPlaying: NowPlaying
     let leave: () -> Void
     let retry: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            VideoSurface(engine: transport.session.engine).ignoresSafeArea()
+            VideoSurface(engine: transport.session.engine).ignoresSafeArea().accessibilityHidden(true)
             if let failure = transport.failure {
                 MessageView(message: failure, retry: { retry() }, close: leave)
                     .background(.black.opacity(0.7))
@@ -78,7 +79,8 @@ private struct PlayerContent: View {
                 VStack {
                     if transport.panel != nil {
                         PlayerPanel(transport: transport)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            // Reduce Motion: fade only, no slide (M5-3).
+                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     }
                     Spacer()
                     if let banner = transport.commercialBanner {
@@ -161,6 +163,10 @@ private struct TransportBar: View {
             }
             Scrubber(progress: transport.progress, breaks: transport.breakSegments, scrubbing: transport.scrubPosition != nil)
                 .frame(height: 12)
+                .accessibilityElement()
+                .accessibilityLabel(Labels.position)
+                .accessibilityValue(Labels.spokenPosition(transport.elapsedText, of: transport.duration))
+                .accessibilityIdentifier("player.scrubber")
             HStack {
                 Text(transport.elapsedText).accessibilityIdentifier("player.elapsed")
                 Spacer()

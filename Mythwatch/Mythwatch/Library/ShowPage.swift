@@ -94,6 +94,7 @@ struct ShowView: View {
                     .opacity(0.6)
             } placeholder: { EmptyView() }
             .ignoresSafeArea()
+            .accessibilityHidden(true)
         }
     }
 
@@ -144,6 +145,7 @@ struct EpisodeRow: View {
             }
             .padding(.vertical, 8)
         }
+        .accessibilityLabel(Labels.spokenEpisodeRow(recording))
         .contextMenu {
             Button(recording.flags.contains(.watched) ? Labels.markUnwatched : Labels.markWatched) {
                 model.toggleWatched(recording)
