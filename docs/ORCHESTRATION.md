@@ -272,9 +272,13 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   (15 tests, 1 skipped). `THIRD_PARTY_NOTICES.md` dropped libzvbi and the GPL 2 text; the licences
   test checks "libzvbi is left out". `Tools/fetch-vlckit.sh` now fetches only the prebuilt
   MobileVLCKit (still with zvbi) for the later iPhone app. VideoLAN's binary is kept for comparison
-  at `build/TVVLCKit-prebuilt-3.7.4.xcframework` (git-ignored). **Not yet checked: real playback on
-  the owner's Apple TV** with this build (picture, sound, deinterlace, captions, seeking); the UI
-  tests use a fake engine. Still open for any public release: the permissive libraries' notice
+  at `build/TVVLCKit-prebuilt-3.7.4.xcframework` (git-ignored). **Checked by the owner on the
+  Apple TV** (2026-11-17, Debug build installed with `devicectl`): start, picture and sound,
+  deinterlace, captions, seeking, commercial skip and resume all as expected. Switching to an audio
+  track labelled Spanish changed the sound but was not Spanish on several shows; the same was seen
+  in M0-3 with VideoLAN's binary (recording 3753), so not caused by this build. Likely the
+  broadcast (a second track that is audio description or another mix, labelled Spanish); not
+  confirmed. Still open for any public release: the permissive libraries' notice
   texts (BSD, MIT, ISC, libpng, zlib) are named but not reproduced.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
