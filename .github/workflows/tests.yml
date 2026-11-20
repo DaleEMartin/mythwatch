@@ -1,0 +1,34 @@
+# Package tests and the dependency rule (SPEC §2) on every push and pull request.
+# The app target is not built here: it needs VLCKit, which takes about 15 minutes to build
+# (Tools/build-vlckit.sh) and is not kept in git.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode on the runner
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
+      - name: Dependency rule
+        run: Tools/check-deps.sh
+      - name: Package tests
+        working-directory: MythwatchKit
+        run: swift test
