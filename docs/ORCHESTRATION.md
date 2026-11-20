@@ -26,8 +26,8 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   basement, no other method. One GET had a side effect: `/Content/GetImageFile` with `Width`
   makes the backend write a scaled cache copy beside the original (one 120-wide cover was
   requested). Raw captures are in `/private/tmp/claude-501/mythwatch-m15-raw/`, not in the repo.
-  The fixtures keep real programme titles, channel call signs (local market), Schedules
-  Direct ids and 2025 recording times; the owner decided on 2026-11-15 to leave them.
+  The fixtures' programme and channel data was swapped for invented values on 2026-11-19,
+  before the repo went public (history rewritten too; see the fixtures README).
 - **M1-6 done and committed** (2026-11-14): v35 DTOs, lenient decoding, `RecordingMapper`. Row
   rules (which rows are skipped) are in `BACKEND-V35.md`.
 - **M1-7 done and committed** (2026-11-14): v35 read path and `V35AdapterFactory`. Every write
@@ -325,15 +325,15 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   task that adds a framework import to the package, run the iOS build check in SPEC §11.
 - Confirmed by the owner 2026-11-14: bundle-id prefix `com.daleemartin` (the "e" is a middle
   initial); the `NSLocalNetworkUsageDescription` wording in `Mythwatch/Info.plist`.
-- **GitHub** (owner, 2026-11-15): private repo `DaleEMartin/mythwatch`, remote `origin` over HTTPS
+- **GitHub** (owner, 2026-11-15): repo `DaleEMartin/mythwatch`, remote `origin` over HTTPS
   (gh's login; this Mac has no SSH key for GitHub). Push `main` after each committed task. Do not
-  push the `m0-3-vlckit-spike` branch, and do not make the repo public without the owner (the
-  fixtures hold real programme and channel data).
+  push the `m0-3-vlckit-spike` branch. On 2026-11-19, to prepare going public, the history was
+  rewritten: commit email to the GitHub noreply address, the backend's host name and LAN address,
+  and the fixtures' programme and channel data replaced. Commit with the noreply email.
 ## Owner decisions of 2026-11-15 (approved; apply after M3-2, one at a time)
 
-1. **Fixtures: leave as captured.** The owner first approved replacing the channel call signs,
-   numbers and Schedules Direct ids, then decided on 2026-11-15 not to bother after hearing
-   what they reveal (the local TV market). Nothing to change and no history rewrite needed.
+1. **Fixtures: leave as captured.** Superseded on 2026-11-19: before going public the owner
+   had the programme and channel data replaced with invented values, history included.
 2. **Skip rules (SPEC §5.1 R4):** chain the landing. When R2 skips a break and the next armed,
    eligible break starts before `landing + quietPeriod`, land at that break's landing point
    instead, and repeat. A follow-up to M4-1, before or with M4-2.

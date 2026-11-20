@@ -215,7 +215,7 @@ per model. Things the models already decided that the views must respect:
 
 ## Decisions already made (do not reopen)
 
-- Fixtures stay as captured, with the real titles and channel names.
+- Fixtures keep their captured shape; titles and channel data were replaced with invented values (2026-11-19).
 - A show's kind is its most common recording kind; unknown kinds do not vote.
 - Commercial skips chain across breaks less than 2 s apart (SPEC §5.1 R2 "Chaining").
 - Resuming inside a break skips it; starting at a bookmark inside a break plays it.

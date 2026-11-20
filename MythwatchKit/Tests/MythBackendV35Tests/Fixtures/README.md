@@ -15,8 +15,11 @@ stay exactly as the backend sent them.
   `Log` object are removed; `Build` is verbatim.
 - `Cast` is removed from every programme. As captured it was `"Cast": null` in the list pages
   (sent with `IncCast=false`) and `"Cast": {"CastMembers": []}` in both `GetRecorded` replies.
-- Nothing else was changed. Programme titles, channel names, call signs, `XMLTVID` values and
-  channel icon names are real.
+- Before the repository went public (2026-11-19), every identifying value was swapped for an
+  invented one, in these files and in the git history: programme titles, subtitles and
+  descriptions, channel names, call signs and numbers, `XMLTVID` values, channel icon names,
+  `Inetref` values and `ProgramId`/`SeriesId`. Titles keep their alphabetical order, and
+  escaping, JSON shapes, ids, times and numbers are unchanged.
 
 ## Files
 
