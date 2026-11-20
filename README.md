@@ -24,6 +24,21 @@ state.
 - To build: a Mac with **Xcode 27** (Swift 6 language mode). Package tests run on macOS 15 or
   later.
 
+## What has been tested
+
+Mythwatch is a personal project, built for and tested against one setup. It may well work more
+widely, but this is all that has been tried:
+
+- **Backend:** MythTV **v35.0** on **Debian**: a single master backend whose services API has no
+  password.
+- **Recordings:** over-the-air ATSC recordings, all **MPEG-2** (1080i, AC-3 audio) in `.ts` and
+  `.mpg` files. VLCKit should also play H.264 and HEVC recordings, but none have been tried.
+- **Apple TV:** an **Apple TV HD** (the oldest model tvOS 26 runs on) with tvOS 26.6, and the
+  tvOS simulator. Not tried on an Apple TV 4K.
+
+Not supported: MythTV versions other than v35 (refused with a message saying so), backends that
+ask for a password, Live TV, and the Videos library.
+
 ## Building
 
 VLCKit is not kept in git. Build it once after cloning; the script builds VideoLAN's VLCKit
@@ -98,6 +113,17 @@ that supports it.
    the dependency table in SPEC §2 and `Tools/check-deps.sh`.
 
 The full procedure is in SPEC §4, "Adding a backend version".
+
+## Bug reports and contributions
+
+Bug reports are welcome: open an issue and give your MythTV version, the backend's operating
+system, your Apple TV model and tvOS version, and the recording's format if it is about playback.
+Because only the setup above has been tested, reports from other setups are especially useful,
+but there is no promise of a fix.
+
+Pull requests are welcome too. Please keep them small and open an issue first for anything
+bigger than a fix. Run `swift test` in `MythwatchKit` and `Tools/check-deps.sh` before sending,
+and add tests for what you change; `docs/SPEC.md` describes how the code fits together.
 
 ## Licence
 

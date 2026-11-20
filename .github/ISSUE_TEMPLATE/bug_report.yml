@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in Mythwatch doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Mythwatch has only been tested with MythTV v35.0 on Debian, MPEG-2 recordings and an
+        Apple TV HD. Reports from other setups are useful; please say what yours is.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Include any message the app showed.
+    validations:
+      required: true
+  - type: input
+    id: mythtv
+    attributes:
+      label: MythTV version
+      description: As shown in mythfrontend or by `mythbackend --version`, e.g. v35.0.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Backend operating system
+      placeholder: e.g. Debian 12
+    validations:
+      required: true
+  - type: input
+    id: appletv
+    attributes:
+      label: Apple TV model and tvOS version
+      placeholder: e.g. Apple TV 4K (3rd generation), tvOS 26.6
+    validations:
+      required: true
+  - type: input
+    id: format
+    attributes:
+      label: Recording format (for playback problems)
+      description: Container, video codec and resolution if you know them, e.g. .ts, H.264, 720p.
+  - type: input
+    id: version
+    attributes:
+      label: Mythwatch version or commit
+      placeholder: e.g. 451663a
