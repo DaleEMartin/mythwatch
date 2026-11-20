@@ -1410,6 +1410,7 @@ backend saved in the app's settings, and only moves focus, opens pages and goes 
 | Click left / right | Skip back / forward by the configured step |
 | Swipe on the touch surface while paused | Scrub; click to commit, Menu to cancel |
 | Swipe down (a third of the surface, mostly vertical) | Panel with Info, Audio, Subtitles tabs |
+| Click up, or the up arrow on a TV remote, with the panel closed | Shows the transport bar, as a swipe up does (owner, 2026-11-19) |
 | Click down, or the down arrow on a TV remote (HDMI-CEC) | The same panel, as in Apple's player (owner, 2026-11-19) |
 | Swipe up (a quarter of the surface, mostly vertical) starting while the panel's tabs are focused | Close the panel; read from the touch surface by a pan recognizer on the window while the panel is open (owner, 2026-11-16) |
 | Click up, or the up arrow on a TV remote, starting while the panel's tabs are focused | Close the panel. Read when the press begins, by a recognizer on the window, so an up press from a panel button only moves focus to the tabs (owner, 2026-11-19) |
@@ -1428,7 +1429,7 @@ the episode page, which calls `AppModel.finishPlayback` and then reloads its own
 `onDisappear` also leaves, so a session is never released unfinished. Try Again on the failure
 calls `retryPlayback` and starts the new session. Remote input comes through
 `Player/RemoteInputView.swift`, a focusable UIKit view (SwiftUI cannot tell a touch-surface swipe
-from a click or measure one): presses map to `select`, `playPause`, skips, `back` and (down) `openPanel`; a horizontal
+from a click or measure one): presses map to `select`, `playPause`, skips, `back`, (up) `showControls` and (down) `openPanel`; a horizontal
 swipe to `scrub(by:)` in fractions of the view's width; a downward swipe opens the panel. It is
 on screen only while the panel is closed, so focus moves into the panel (a segmented Info /
 Audio / Subtitles picker; Menu closes it). `Player/NowPlaying.swift` publishes the title,

@@ -137,6 +137,8 @@ private struct PlayerContent: View {
             playPause: { transport.playPause() },
             left: { transport.skipBackward() },
             right: { transport.skipForward() },
+            // Like a swipe up, which shows the bar because it starts with a touch.
+            up: { transport.showControls() },
             // Opened after the press finishes: the input view is removed when the panel opens,
             // and removing the focused view inside its own press leaves nothing focused.
             down: { Task { @MainActor in transport.openPanel() } },

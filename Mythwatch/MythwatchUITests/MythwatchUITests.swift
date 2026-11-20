@@ -155,10 +155,15 @@ final class MythwatchUITests: XCTestCase {
         wait(for: [gone], timeout: 3)
         XCTAssertTrue(waitForFocus(prefix: "player.input"))
 
-        // Up with the panel closed does nothing; down opens it again.
+        // Up with the panel closed shows the transport bar, as a swipe up does (owner,
+        // 2026-11-19), and opens nothing. Wait for the bar to hide first (5 s while playing).
+        let transport = app.otherElements["player.transport"]
+        let barHidden = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: transport)
+        wait(for: [barHidden], timeout: 10)
         remote.press(.up)
-        sleep(1)
+        XCTAssertTrue(transport.waitForExistence(timeout: 3), "up shows the transport bar")
         XCTAssertFalse(panel.exists)
+        // Down opens the panel again.
         remote.press(.down)
         XCTAssertTrue(panel.waitForExistence(timeout: 3))
     }
