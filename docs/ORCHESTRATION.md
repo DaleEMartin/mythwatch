@@ -346,7 +346,8 @@ this note is the full handoff. Update the "Status" section as work proceeds.
 ## Roles the owner chose
 
 A direct Opus session run by the owner is an implementer, not the orchestrator: it writes code
-itself and works from `opus-handoff.md` in the repo root.
+itself, following `CLAUDE.md` and the Status section above. (Its earlier brief,
+`opus-handoff.md`, was removed on 2026-11-19 before the repo went public; it is in git history.)
 
 - **Fable orchestrates and reviews; it does not write application code.** Implementation is done
   by Sonnet and Opus subagents (the Agent tool's `model` parameter), per the model suggestion on

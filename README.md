@@ -107,4 +107,15 @@ The app embeds VideoLAN's VLCKit, which is under the GNU LGPL and contains other
 libraries. `THIRD_PARTY_NOTICES.md` lists them with their licences and
 where to get their source; the app shows the same text under Settings › About › Licences.
 
-The app icon and Top Shelf images are placeholders.
+The app icon and Top Shelf images (Medusa in blue-blocker glasses) were drawn for this project
+and are under the same MIT licence.
+
+## Working files
+
+Mythwatch was built with AI coding agents working from a written spec. The spec and the agents'
+working files are kept in the repository as a record of how it was made:
+
+- `docs/SPEC.md`, `docs/BACKEND-V35.md` and `docs/VLCKIT.md` describe the design, the v35 wire
+  contract and the player choice. They are the documents to read if you want to change the code.
+- `docs/TASKS.md`, `docs/ORCHESTRATION.md` and `CLAUDE.md` are the task list, the progress log
+  and the rules the agents followed. "The owner" in them is the project's author.
