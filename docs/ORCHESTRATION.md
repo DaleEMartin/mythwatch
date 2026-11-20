@@ -280,6 +280,14 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   broadcast (a second track that is audio description or another mix, labelled Spanish); not
   confirmed. Still open for any public release: the permissive libraries' notice
   texts (BSD, MIT, ISC, libpng, zlib) are named but not reproduced.
+- **App icon and Top Shelf replaced** (owner, 2026-11-18): the M5-4 placeholder (eye on violet)
+  is now a cartoon Medusa on a blue gradient, wearing chunky "blue blocker" glasses with
+  see-through amber lenses; seven snakes, two winking with tongues out; no earrings. Layers:
+  back = gradient and glow, middle = face, hair and four upper snakes, front = three snakes.
+  Exported from the owner-approved vector sketch (claude.ai artifact, not in the repo) with
+  headless Chrome at every catalogue size. Sketch-quality art, not final illustration. The images
+  total 6.5 MB (was 780 KB), mostly the faint scanline texture; shrink before any public release.
+  Installed on the owner's Apple TV (Debug, `devicectl`) the same day.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

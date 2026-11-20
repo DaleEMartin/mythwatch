@@ -55,7 +55,7 @@ mythwatch/
     Mythwatch.xcodeproj
     Info.plist
     Mythwatch/                     SwiftUI views, VLCPlayerEngine, App/Composition.swift (composition root),
-                                   Assets.xcassets (app icon and Top Shelf images; placeholders, M5-4)
+                                   Assets.xcassets (app icon and Top Shelf images; Medusa artwork)
     MythwatchUITests/
   Tools/capture-fixtures.sh  Tools/check-deps.sh
 ```
@@ -84,7 +84,8 @@ its own: tests of the fakes live in the test target of the layer the fake stands
 example `FixtureTransport` is tested in `MythwatchBackendTests`).
 
 `MythwatchFeatures` must not import `MythBackendV35`. Only the app's composition root names it.
-No target other than `MythBackendV35` may contain a v35 endpoint path or JSON key.
+No target other than `MythBackendV35` may contain a v35 endpoint path or JSON key. The one
+exception is `BackendProbe`'s two version-neutral calls (§5), which run before the version is known.
 
 ## 3. Domain (`MythwatchDomain`)
 
