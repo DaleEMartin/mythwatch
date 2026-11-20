@@ -117,6 +117,52 @@ final class MythwatchUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["player.screen"].exists)
     }
 
+    /// Arrow presses, as a TV remote sends them over HDMI-CEC (owner, 2026-11-19): down opens the
+    /// panel, as in Apple's player; up from the tabs closes it, but up from a button inside the
+    /// panel only moves focus back to the tabs.
+    @MainActor
+    func testUpAndDownPressesOpenAndCloseThePanel() {
+        launch(backendSaved: true)
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        press(.down, untilFocusedPrefix: "card.continueWatching.")
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        press(.down, untilFocusedPrefix: "detail.start.")
+        press(.right, until: app.buttons["detail.start.beginning"], limit: 4)
+        remote.press(.select)
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForFocus(prefix: "player.input"))
+
+        // The tabs' segments do not report focus to XCUITest, so focus on the tabs is checked by
+        // what a press does from there: down reaches Set Bookmark Here, the panel's only button.
+        let panel = app.otherElements["player.panel"]
+        let bookmark = app.buttons["player.bookmark"]
+        remote.press(.down)
+        XCTAssertTrue(panel.waitForExistence(timeout: 3), "down opens the panel")
+        remote.press(.down)
+        XCTAssertTrue(waitForFocus(prefix: "player.bookmark"), "the panel opened with the tabs focused")
+
+        // Up from Set Bookmark Here moves focus back to the tabs; the panel stays open.
+        remote.press(.up)
+        let leftBookmark = expectation(for: NSPredicate(format: "hasFocus == false"), evaluatedWith: bookmark)
+        wait(for: [leftBookmark], timeout: 3)
+        sleep(1)
+        XCTAssertTrue(panel.exists, "up from a panel button only moves focus to the tabs")
+
+        // Up from the tabs closes it and hands focus back to the player.
+        remote.press(.up)
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: panel)
+        wait(for: [gone], timeout: 3)
+        XCTAssertTrue(waitForFocus(prefix: "player.input"))
+
+        // Up with the panel closed does nothing; down opens it again.
+        remote.press(.up)
+        sleep(1)
+        XCTAssertFalse(panel.exists)
+        remote.press(.down)
+        XCTAssertTrue(panel.waitForExistence(timeout: 3))
+    }
+
     /// M4-3: the demo film resumes at 1:02:03 inside a break (1:00:00 to 1:03:00), so the skip
     /// happens at once and the banner shows; Select goes back to 2 s before where it was.
     @MainActor

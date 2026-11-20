@@ -8,6 +8,8 @@ struct RemoteInput {
     var playPause: () -> Void = {}
     var left: () -> Void = {}
     var right: () -> Void = {}
+    /// A click down (Siri Remote) or a down arrow (a TV remote over HDMI-CEC).
+    var down: () -> Void = {}
     var menu: () -> Void = {}
     /// A horizontal swipe on the touch surface, in full swipes (1 = across the whole surface).
     var swipe: (Double) -> Void = { _ in }
@@ -61,7 +63,7 @@ final class RemoteInputUIView: UIView {
 
     // MARK: Presses
 
-    private static let handled: Set<UIPress.PressType> = [.select, .playPause, .leftArrow, .rightArrow, .menu]
+    private static let handled: Set<UIPress.PressType> = [.select, .playPause, .leftArrow, .rightArrow, .downArrow, .menu]
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         let others = presses.filter { !Self.handled.contains($0.type) }
@@ -78,6 +80,7 @@ final class RemoteInputUIView: UIView {
             case .playPause: input.playPause()
             case .leftArrow: input.left()
             case .rightArrow: input.right()
+            case .downArrow: input.down()
             case .menu: input.menu()
             default: others.insert(press)
             }

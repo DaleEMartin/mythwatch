@@ -137,6 +137,9 @@ private struct PlayerContent: View {
             playPause: { transport.playPause() },
             left: { transport.skipBackward() },
             right: { transport.skipForward() },
+            // Opened after the press finishes: the input view is removed when the panel opens,
+            // and removing the focused view inside its own press leaves nothing focused.
+            down: { Task { @MainActor in transport.openPanel() } },
             menu: { if transport.back() == .leave { leave() } },
             swipe: { transport.scrub(by: $0) },
             swipeDown: { transport.openPanel() },
@@ -295,6 +298,9 @@ private struct PlayerPanel: View {
         .padding(.top, 50)
         .focusSection()
         .onExitCommand { transport.closePanel() }
+        // `defaultFocus` alone is not enough when the panel opens from a press: the input view
+        // that had focus is gone by then and nothing is focused, so ask for the tabs outright.
+        .onAppear { tabsFocused = true }
         .background(SwipeUpCatcher(armed: tabsFocused, swipedUp: { transport.closePanel() }))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
@@ -383,11 +389,14 @@ private struct VideoSurface: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {}
 }
 
-/// Closes the panel on a swipe up that starts while the tabs are focused, as in Apple's TV app.
-/// Focus alone cannot do it: nothing is above the tabs, so a swipe up there moves nothing and
-/// SwiftUI reports nothing. This watches the touch surface itself, through a pan recognizer on
-/// the window (indirect touches reach the window whatever is focused). It only watches; it never
-/// takes touches from the focus engine. It exists only while the panel is open.
+/// Closes the panel on a swipe up, or an up press, that starts while the tabs are focused, as in
+/// Apple's TV app. Focus alone cannot do it: nothing is above the tabs, so a swipe up there moves
+/// nothing and SwiftUI reports nothing. This watches the touch surface and the up arrow itself,
+/// through recognizers on the window (indirect touches and presses reach the window whatever is
+/// focused). It only watches; it never takes touches or presses from the focus engine. The up
+/// press is read when it begins, before the focus engine moves: an up press from a panel button
+/// lands on the tabs, and must not then count as a press from the tabs. It exists only while the
+/// panel is open.
 private struct SwipeUpCatcher: UIViewRepresentable {
     let armed: Bool
     let swipedUp: () -> Void
@@ -408,7 +417,7 @@ private struct SwipeUpCatcher: UIViewRepresentable {
 }
 
 final class SwipeUpCatcherView: UIView, UIGestureRecognizerDelegate {
-    /// Whether the tabs are focused now; read when a swipe starts.
+    /// Whether the tabs are focused now; read when a swipe or an up press starts.
     var armedNow = false
     var swipedUp: () -> Void = {}
     /// The swipe must go this share of the surface's height, mostly straight up.
@@ -426,12 +435,38 @@ final class SwipeUpCatcherView: UIView, UIGestureRecognizerDelegate {
         return pan
     }()
 
+    /// Never recognizes: its delegate sees each up press begin, which is all that is needed.
+    private lazy var upPress: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer()
+        tap.allowedPressTypes = [NSNumber(value: UIPress.PressType.upArrow.rawValue)]
+        tap.allowedTouchTypes = []
+        tap.delegate = self
+        return tap
+    }()
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if let window { window.addGestureRecognizer(pan) } else { detach() }
+        if let window {
+            window.addGestureRecognizer(pan)
+            window.addGestureRecognizer(upPress)
+        } else {
+            detach()
+        }
     }
 
-    func detach() { pan.view?.removeGestureRecognizer(pan) }
+    func detach() {
+        pan.view?.removeGestureRecognizer(pan)
+        upPress.view?.removeGestureRecognizer(upPress)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive press: UIPress) -> Bool {
+        if gestureRecognizer === upPress, press.type == .upArrow, armedNow {
+            // After the press is handled: closing removes the focused tabs.
+            let close = swipedUp
+            Task { @MainActor in close() }
+        }
+        return false
+    }
 
     @objc private func panned(_ pan: UIPanGestureRecognizer) {
         switch pan.state {
