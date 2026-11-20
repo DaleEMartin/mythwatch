@@ -292,8 +292,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   down opens the panel, up from the tabs closes it, up with the panel closed shows the transport
   bar (as a swipe up does). SPEC §7 table updated; `testUpAndDownPressesOpenAndCloseThePanel`.
   Checked by the owner on the Apple TV. The owner calls this state **version 0** (2026-11-19).
-  Still signed with the free Personal Team (7-day profiles); the paid Developer Program
-  membership is pending in Xcode, and the project's team must be switched once it appears.
+  Signing: the owner joined the paid Developer Program on 2026-11-19. The team ID is unchanged
+  (D637HR5735), so the project needed no change; Xcode had cached the free 7-day profiles, which
+  were moved aside to force new ones. The new profile runs to 2027-11-20, and that build is
+  installed on the owner's Apple TV.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through
