@@ -310,6 +310,14 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   a scrub, then `pause()`, which saves), 4 tests in "TransportLeavingTheForegroundTests"; the tvOS
   player calls it on `.background`; the phone app sets the `.playback` audio session at launch.
   The phone player (M6-4) must call it too. Not checked on hardware.
+- **M6-3 done and committed** (2026-11-21, same session): iPhone/iPad screens in
+  `Mythwatch/MythwatchPhone/` (Root, Onboarding, Recordings, Show, Episode detail, Settings,
+  Licences, phone-sized messages); `WatchMark` and `AboutInfo` moved to `Common/`. 7 UI tests in
+  `MythwatchPhoneUITests` pass on the iPhone 18 Pro simulator (onboarding, library, show to
+  episode and back, delete dialog, settings and licences, empty, unreachable). The episode page's
+  start buttons do nothing until M6-4. Not looked at on iPad or in landscape. **The Licences
+  screen bundles the tvOS notices** (TVVLCKit without zvbi), which is wrong for the iPhone build
+  while it embeds VideoLAN's MobileVLCKit with zvbi: M6-6 fixes it before any release.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

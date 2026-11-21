@@ -56,7 +56,8 @@ mythwatch/
     Info.plist  MythwatchPhone-Info.plist
     Common/                        in both app targets: App/Composition.swift (composition root),
                                    Player/VLCPlayerEngine.swift, Player/NowPlaying.swift,
-                                   Labels.swift, ArtworkImage.swift, DeleteChoices.swift
+                                   Labels.swift, ArtworkImage.swift, DeleteChoices.swift,
+                                   WatchMark.swift, AboutInfo.swift
     Mythwatch/                     tvOS SwiftUI views, Assets.xcassets (app icon and Top Shelf
                                    images; Medusa artwork)
     MythwatchUITests/
@@ -1753,7 +1754,7 @@ Rules that apply now:
 `MythwatchPhone` (iOS 26, iPhone and iPad), each with its own UI test target and scheme.
 Files that build for both live in `Mythwatch/Common/`, a synchronised folder that is a member of
 both targets: the composition root, `VLCPlayerEngine`, `NowPlaying`, `Labels`, `ArtworkImage`,
-`DeleteChoices`. A file moves into `Common/` only when it builds unchanged on both platforms;
+`DeleteChoices`, `WatchMark`, `AboutInfo`. A file moves into `Common/` only when it builds unchanged on both platforms;
 screens stay per platform. `VLCPlayerEngine` picks `TVVLCKit` or `MobileVLCKit` with `#if os(tvOS)`.
 *Why not a package target for the engine* (what this section said before): VLCKit is fetched or
 built into the git-ignored `Vendor/`, so a package `binaryTarget` pointing at it would make
@@ -1761,6 +1762,16 @@ built into the git-ignored `Vendor/`, so a package `binaryTarget` pointing at it
 package would no longer be "no VLCKit" (§2). A shared app folder keeps the package untouched.
 The iOS app uses the same bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store
 record, universal purchase; planner's default, to confirm with the owner).
+
+**iPhone screens (M6-3).** The same screens and models as §7, laid out for touch: Root
+(Onboarding, or a tab bar with Recordings and Settings); Recordings with pull to refresh, both
+shelves as horizontal rows of 240-point cards and the shows as an adaptive grid (posters 104-180
+points wide); Show as a plain list with the fanart and title on top, a segmented season picker
+for up to three seasons and a menu above that, and per episode a swipe to the left for Delete, a
+swipe to the right for Mark Watched / Unwatched, and the same two in the context menu; Episode
+detail as one scrolling column with full-width start buttons and Delete, the synopsis last;
+Onboarding and Settings as forms; Licences as selectable text. Delete dialogs, messages and
+banners follow §7. Same accessibility identifiers as the tvOS screens, so UI tests read alike.
 
 Milestone 6 in `docs/TASKS.md` holds the iPhone tasks.
 
