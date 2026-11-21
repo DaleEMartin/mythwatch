@@ -1,3 +1,4 @@
+import AVFoundation
 import MythwatchFeatures
 import SwiftUI
 
@@ -6,6 +7,12 @@ import SwiftUI
 @main
 struct MythwatchPhoneApp: App {
     @State private var app = Composition.makeAppModel()
+
+    init() {
+        // Recordings are video with sound: play it with the ring/silent switch on silent, as
+        // video apps do (M6-2). A failure only means the system default (muted on silent).
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+    }
 
     var body: some Scene {
         WindowGroup {

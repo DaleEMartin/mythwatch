@@ -63,6 +63,7 @@ private struct PlayerContent: View {
     let leave: () -> Void
     let retry: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -111,6 +112,10 @@ private struct PlayerContent: View {
             }
         }
         .onChange(of: transport.hasEnded) { _, ended in if ended { leave() } }
+        // Sent to the background (Home, or the Apple TV sleeping): pause, which saves the place
+        // (SPEC 6.4 "Leaving the foreground"). Not on `.inactive`: an overlay such as Control
+        // Centre passes through it and should not stop the programme.
+        .onChange(of: scenePhase) { _, phase in if phase == .background { transport.leftForeground() } }
         // The model has no timer: wake it when the controls are due to hide.
         .task(id: transport.hideAt) {
             guard let at = transport.hideAt else { return }

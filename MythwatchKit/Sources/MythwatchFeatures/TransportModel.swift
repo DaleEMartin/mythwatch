@@ -306,6 +306,14 @@ import Observation
         showControls()
     }
 
+    /// The screen's scene stopped being active (SPEC 6.4 "Leaving the foreground", M6-2): a scrub
+    /// is cancelled and playback pauses, which saves the position (SPEC 5.2). Coming back does
+    /// not play; the viewer finds the controls up and presses Play.
+    public func leftForeground() {
+        endScrub(restore: true)
+        pause()
+    }
+
     /// Ends a scrub; with `restore`, moves the video back to where the scrub began if a preview
     /// moved it. Without, the video stays where it is (a skip then acts from there).
     private func endScrub(restore: Bool) {

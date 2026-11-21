@@ -544,3 +544,53 @@ struct TransportModelTests {
         #expect(!rig.model.isPlaying)
     }
 }
+
+/// M6-2 (SPEC 6.4 "Leaving the foreground"): the screen calls `leftForeground()` when its scene
+/// stops being active; iOS suspends a background app, so playback pauses and the position is saved.
+@MainActor @Suite(.timeLimit(.minutes(1)))
+struct TransportLeavingTheForegroundTests {
+    @Test func leavingWhilePlayingPausesSavesAndShowsTheControls() async throws {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(100))
+        rig.advance(.seconds(6))
+        #expect(!rig.model.controlsVisible)
+        rig.state.suspend(.setResumePosition)
+        rig.model.leftForeground()
+        await rig.engine.waitUntilDelivered()
+        #expect(rig.engine.snapshot.status == .paused)
+        #expect(rig.model.controlsVisible)
+        try await rig.state.waitForParked(1, of: .setResumePosition)
+        #expect(rig.state.calls.contains(.setResumePosition(.seconds(100), rig.recording.id)))
+    }
+
+    @Test func leavingWhilePausedChangesNothing() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(100))
+        let before = rig.engine.calls.count
+        rig.model.leftForeground()
+        #expect(rig.engine.calls.count == before)
+        #expect(rig.engine.snapshot.status == .paused)
+    }
+
+    @Test func leavingDuringAScrubPutsTheVideoBack() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(100))
+        rig.model.scrub(by: 0.5)
+        rig.advance(TransportModel.scrubPreviewDelay)
+        #expect(rig.seeks.last != .seconds(100))
+        rig.model.leftForeground()
+        #expect(rig.model.scrubPosition == nil)
+        #expect(rig.seeks.last == .seconds(100))
+    }
+
+    @Test func comingBackDoesNotPlay() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(100))
+        let before = rig.engine.calls.count
+        rig.model.leftForeground()
+        await rig.engine.waitUntilDelivered()
+        rig.model.tick()
+        #expect(rig.engine.snapshot.status == .paused)
+        #expect(Array(rig.engine.calls.dropFirst(before)) == [.pause])
+    }
+}

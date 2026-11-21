@@ -306,6 +306,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   UI suite passes after the move (16 tests, 1 skipped). **Planner's defaults to confirm:** iPad
   included; same bundle id as tvOS (`com.daleemartin.Mythwatch`, universal purchase); home
   network or VPN only.
+- **M6-2 done and committed** (2026-11-21, same session): `TransportModel.leftForeground()` (cancel
+  a scrub, then `pause()`, which saves), 4 tests in "TransportLeavingTheForegroundTests"; the tvOS
+  player calls it on `.background`; the phone app sets the `.playback` audio session at launch.
+  The phone player (M6-4) must call it too. Not checked on hardware.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

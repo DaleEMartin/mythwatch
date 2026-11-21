@@ -1241,6 +1241,11 @@ nothing, so a loaded session and the screens and navigation built on it stay as 
 - **Back.** `back()` cancels a scrub, else closes the panel (`.handled`), else returns `.leave`
   and the screen closes.
 - `play()` / `pause()` act only when they change something (remote commands, not toggles).
+- **Leaving the foreground** (M6-2, SPEC 11). `leftForeground()` cancels a scrub (putting a
+  previewed video back) and then acts as `pause()`, so a playing video pauses and the position is
+  saved (§5.2 "Other saves"). Nothing happens on return: the controls are up and the viewer
+  presses Play. Both player screens call it when their scene phase becomes `.background` (not
+  `.inactive`, which overlays such as Control Centre pass through).
 - **Time.** `timeText` is `m:ss` under an hour, else `h:mm:ss`, rounded down. `elapsedText` is the
   preview while scrubbing, else the video's position; `remainingText` is `-` and the time left,
   rounded up so the two add up, nil without a duration (known and above zero), as is `progress`.
