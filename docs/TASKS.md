@@ -283,7 +283,7 @@ icon and Top Shelf image placeholders, in-app About/licences screen.
 Planned 2026-11-21 at the owner's request ("make a plan and let's start working on it"). Shape:
 a second app target, `MythwatchPhone`, in the same Xcode project, with its own touch views and
 the platform-neutral app files shared with the tvOS target (SPEC §11 "Layout"). Defaults the
-planner chose, to confirm with the owner: iPhone and iPad (one universal target); the same
+planner chose, confirmed by the owner on 2026-11-21: iPhone and iPad (one universal target); the same
 bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store record, universal purchase);
 home network or VPN only. AirPlay, Picture in Picture and downloads are not in this milestone.
 
@@ -317,9 +317,10 @@ drives scrub preview / commit / cancel, commercial banner and break segments, au
 track menus, Set Bookmark, close. Landscape and portrait. UI tests on the fakes (play, skip,
 close saves, commercial Go Back).
 
-### M6-5 Now Playing and remote commands — Sonnet ∥ (after M6-4)
-Lock-screen and Control Centre controls on iPhone through the shared Now Playing code; check
-that skip intervals follow the settings.
+### M6-5 Now Playing and remote commands — closed (owner, 2026-11-21)
+No playback while the phone is locked: the player pauses on leaving the foreground (M6-2), and
+there is no background-audio mode. The shared Now Playing code stays attached for Control Centre
+while the app is in front; check its skip intervals in M6-7.
 
 ### M6-6 MobileVLCKit without zvbi — Opus ∥ (long unattended build)
 Extend `Tools/build-vlckit.sh` to build MobileVLCKit 3.7.4 from source with zvbi off, arm64

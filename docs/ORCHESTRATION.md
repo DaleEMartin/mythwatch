@@ -341,11 +341,10 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   player screenshots look right there. New `testThePlayerWorksInLandscape` passes on the iPhone
   (rotates, skips, Close is hittable), but its screenshot came out clipped (captured in portrait
   while the app was in landscape), so the landscape *look* is unchecked. 12 phone UI tests.
-- **M6-5 needs the owner** (2026-11-21): `NowPlaying` is shared and the phone player attaches it,
-  but M6-2 pauses on `.background` and the app has no background-audio mode, so lock-screen
-  controls can only show a paused item. Question for the owner: keep playing audio when the phone
-  locks (needs `UIBackgroundModes` audio and `leftForeground()` only on a real suspension), or
-  pause as now?
+- **M6-5 closed by the owner** (2026-11-21): "it doesn't need to play while the screen is
+  locked." Pausing on `.background` stays; no background-audio mode. `NowPlaying` stays attached
+  (Control Centre while the app is in front). **Planner's defaults confirmed** the same day: iPad
+  included, same bundle id as tvOS, home network or VPN only. M6-7 next, with the owner.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

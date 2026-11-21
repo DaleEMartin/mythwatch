@@ -1768,7 +1768,8 @@ built into the git-ignored `Vendor/`, so a package `binaryTarget` pointing at it
 `swift test` fail in CI and on any clone that has not run `Tools/build-vlckit.sh`, and the
 package would no longer be "no VLCKit" (§2). A shared app folder keeps the package untouched.
 The iOS app uses the same bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store
-record, universal purchase; planner's default, to confirm with the owner).
+record, universal purchase; confirmed by the owner, 2026-11-21). No playback while the phone is
+locked (owner, 2026-11-21): no background-audio mode; the player pauses on `.background`.
 
 **iPhone screens (M6-3).** The same screens and models as §7, laid out for touch: Root
 (Onboarding, or a tab bar with Recordings and Settings); Recordings with pull to refresh, both
