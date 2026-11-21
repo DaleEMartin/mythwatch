@@ -48,9 +48,10 @@ done
 # it. Only the composition root (App/Composition.swift) may import MythBackendV35, and
 # MythwatchTestSupport only there and only inside `#if DEBUG` (Release builds neither link nor
 # contain it; SPEC §7 "UI tests"). Only VLCPlayerEngine.swift may import VLCKit. The UI tests
-# import none of our modules.
-app_dir="../../Mythwatch/Mythwatch"
+# import none of our modules. The same rules hold for the iPhone app and for the files both apps
+# share (SPEC 11 "Layout"); the composition root now lives in Common/.
 composition="App/Composition.swift"
+for app_dir in ../../Mythwatch/Mythwatch ../../Mythwatch/Common ../../Mythwatch/MythwatchPhone; do
 while IFS= read -r file; do
   rel=${file#"$app_dir/"}
   in_debug=0
@@ -74,8 +75,9 @@ while IFS= read -r file; do
     esac
   done < "$file"
 done < <(find "$app_dir" -name '*.swift')
+done
 
-if grep -rqE '^[[:space:]]*(@testable[[:space:]]+)?import[[:space:]]+Myth' ../../Mythwatch/MythwatchUITests; then
+if grep -rqE '^[[:space:]]*(@testable[[:space:]]+)?import[[:space:]]+Myth' ../../Mythwatch/MythwatchUITests ../../Mythwatch/MythwatchPhoneUITests; then
   echo "error: the UI tests must not import Mythwatch modules; they drive the app (SPEC §7)"; status=1
 fi
 

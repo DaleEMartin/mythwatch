@@ -9,10 +9,16 @@
 /* Begin PBXBuildFile section */
 		A1B2C3D400000000000000B1 /* MythwatchFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E2 /* MythwatchFeatures */; };
 		A1B2C3D400000000000000B2 /* MythBackendV35 in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E3 /* MythBackendV35 */; };
-		A1B2C3D400000000000000B9 /* MythwatchTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E4 /* MythwatchTestSupport */; };
 		A1B2C3D400000000000000B4 /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */; };
 		A1B2C3D400000000000000B5 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1B2C3D400000000000000B9 /* MythwatchTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000E4 /* MythwatchTestSupport */; };
 		A1B2C3D400000000000000BA /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000BB /* THIRD_PARTY_NOTICES.md */; };
+		A1B2C3D40000000000000107 /* MythwatchFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D40000000000000120 /* MythwatchFeatures */; };
+		A1B2C3D40000000000000108 /* MythBackendV35 in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D40000000000000121 /* MythBackendV35 */; };
+		A1B2C3D40000000000000109 /* MythwatchTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D40000000000000122 /* MythwatchTestSupport */; };
+		A1B2C3D4000000000000010A /* MobileVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000106 /* MobileVLCKit.xcframework */; };
+		A1B2C3D4000000000000010B /* MobileVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000106 /* MobileVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4000000000000010C /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000000000000BB /* THIRD_PARTY_NOTICES.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,15 +29,31 @@
 			remoteGlobalIDString = A1B2C3D400000000000000A1;
 			remoteInfo = Mythwatch;
 		};
+		A1B2C3D40000000000000132 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D400000000000000F0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D40000000000000130;
+			remoteInfo = MythwatchPhone;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		A1B2C3D400000000000000B7 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
-			dstSubfolderSpec = 10;
+			dstSubfolder = Frameworks;
 			files = (
 				A1B2C3D400000000000000B5 /* TVVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+		};
+		A1B2C3D40000000000000113 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = Frameworks;
+			files = (
+				A1B2C3D4000000000000010B /* MobileVLCKit.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 		};
@@ -42,6 +64,9 @@
 		A1B2C3D400000000000000A6 /* MythwatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MythwatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = ../Vendor/TVVLCKit.xcframework; sourceTree = SOURCE_ROOT; };
 		A1B2C3D400000000000000BB /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = THIRD_PARTY_NOTICES.md; path = ../THIRD_PARTY_NOTICES.md; sourceTree = SOURCE_ROOT; };
+		A1B2C3D40000000000000104 /* MythwatchPhone.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MythwatchPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D40000000000000105 /* MythwatchPhoneUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MythwatchPhoneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D40000000000000106 /* MobileVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MobileVLCKit.xcframework; path = ../Vendor/MobileVLCKit.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -53,6 +78,21 @@
 		A1B2C3D400000000000000A8 /* MythwatchUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MythwatchUITests;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40000000000000101 /* Common */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Common;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40000000000000102 /* MythwatchPhone */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MythwatchPhone;
+			sourceTree = "<group>";
+		};
+		A1B2C3D40000000000000103 /* MythwatchPhoneUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MythwatchPhoneUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -72,6 +112,20 @@
 			files = (
 			);
 		};
+		A1B2C3D40000000000000111 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				A1B2C3D40000000000000107 /* MythwatchFeatures in Frameworks */,
+				A1B2C3D40000000000000108 /* MythBackendV35 in Frameworks */,
+				A1B2C3D40000000000000109 /* MythwatchTestSupport in Frameworks */,
+				A1B2C3D4000000000000010A /* MobileVLCKit.xcframework in Frameworks */,
+			);
+		};
+		A1B2C3D40000000000000115 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -80,6 +134,9 @@
 			children = (
 				A1B2C3D400000000000000A7 /* Mythwatch */,
 				A1B2C3D400000000000000A8 /* MythwatchUITests */,
+				A1B2C3D40000000000000101 /* Common */,
+				A1B2C3D40000000000000102 /* MythwatchPhone */,
+				A1B2C3D40000000000000103 /* MythwatchPhoneUITests */,
 				A1B2C3D400000000000000BB /* THIRD_PARTY_NOTICES.md */,
 				A1B2C3D400000000000000B8 /* Frameworks */,
 				A1B2C3D400000000000000AC /* Products */,
@@ -91,6 +148,8 @@
 			children = (
 				A1B2C3D400000000000000A5 /* Mythwatch.app */,
 				A1B2C3D400000000000000A6 /* MythwatchUITests.xctest */,
+				A1B2C3D40000000000000104 /* MythwatchPhone.app */,
+				A1B2C3D40000000000000105 /* MythwatchPhoneUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -99,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D400000000000000B6 /* TVVLCKit.xcframework */,
+				A1B2C3D40000000000000106 /* MobileVLCKit.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -117,10 +177,9 @@
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
 			fileSystemSynchronizedGroups = (
 				A1B2C3D400000000000000A7 /* Mythwatch */,
+				A1B2C3D40000000000000101 /* Common */,
 			);
 			name = Mythwatch;
 			packageProductDependencies = (
@@ -149,10 +208,54 @@
 				A1B2C3D400000000000000A8 /* MythwatchUITests */,
 			);
 			name = MythwatchUITests;
-			packageProductDependencies = (
-			);
 			productName = MythwatchUITests;
 			productReference = A1B2C3D400000000000000A6 /* MythwatchUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		A1B2C3D40000000000000130 /* MythwatchPhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D40000000000000140 /* Build configuration list for PBXNativeTarget "MythwatchPhone" */;
+			buildPhases = (
+				A1B2C3D40000000000000110 /* Sources */,
+				A1B2C3D40000000000000111 /* Frameworks */,
+				A1B2C3D40000000000000112 /* Resources */,
+				A1B2C3D40000000000000113 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D40000000000000101 /* Common */,
+				A1B2C3D40000000000000102 /* MythwatchPhone */,
+			);
+			name = MythwatchPhone;
+			packageProductDependencies = (
+				A1B2C3D40000000000000120 /* MythwatchFeatures */,
+				A1B2C3D40000000000000121 /* MythBackendV35 */,
+				A1B2C3D40000000000000122 /* MythwatchTestSupport */,
+			);
+			productName = MythwatchPhone;
+			productReference = A1B2C3D40000000000000104 /* MythwatchPhone.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D40000000000000131 /* MythwatchPhoneUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D40000000000000141 /* Build configuration list for PBXNativeTarget "MythwatchPhoneUITests" */;
+			buildPhases = (
+				A1B2C3D40000000000000114 /* Sources */,
+				A1B2C3D40000000000000115 /* Frameworks */,
+				A1B2C3D40000000000000116 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D40000000000000133 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D40000000000000103 /* MythwatchPhoneUITests */,
+			);
+			name = MythwatchPhoneUITests;
+			productName = MythwatchPhoneUITests;
+			productReference = A1B2C3D40000000000000105 /* MythwatchPhoneUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -171,6 +274,13 @@
 					A1B2C3D400000000000000A2 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = A1B2C3D400000000000000A1;
+					};
+					A1B2C3D40000000000000130 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					A1B2C3D40000000000000131 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A1B2C3D40000000000000130;
 					};
 				};
 			};
@@ -193,6 +303,8 @@
 			targets = (
 				A1B2C3D400000000000000A1 /* Mythwatch */,
 				A1B2C3D400000000000000A2 /* MythwatchUITests */,
+				A1B2C3D40000000000000130 /* MythwatchPhone */,
+				A1B2C3D40000000000000131 /* MythwatchPhoneUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -205,6 +317,17 @@
 			);
 		};
 		A1B2C3D400000000000000B3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		A1B2C3D40000000000000112 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				A1B2C3D4000000000000010C /* THIRD_PARTY_NOTICES.md in Resources */,
+			);
+		};
+		A1B2C3D40000000000000116 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -222,6 +345,16 @@
 			files = (
 			);
 		};
+		A1B2C3D40000000000000110 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		A1B2C3D40000000000000114 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -229,6 +362,11 @@
 			isa = PBXTargetDependency;
 			target = A1B2C3D400000000000000A1 /* Mythwatch */;
 			targetProxy = A1B2C3D400000000000000D1 /* PBXContainerItemProxy */;
+		};
+		A1B2C3D40000000000000133 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D40000000000000130 /* MythwatchPhone */;
+			targetProxy = A1B2C3D40000000000000132 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -357,12 +495,12 @@
 		A1B2C3D400000000000000C3 /* Debug configuration for PBXNativeTarget "Mythwatch" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D637HR5735;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -387,13 +525,13 @@
 		A1B2C3D400000000000000C4 /* Release configuration for PBXNativeTarget "Mythwatch" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D637HR5735;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_SOURCE_FILE_NAMES = MythwatchTestSupport.o;
 				GENERATE_INFOPLIST_FILE = YES;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -453,6 +591,129 @@
 			};
 			name = Release;
 		};
+		A1B2C3D40000000000000142 /* Debug configuration for PBXNativeTarget "MythwatchPhone" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D637HR5735;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MythwatchPhone-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Mythwatch;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daleemartin.Mythwatch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1B2C3D40000000000000143 /* Release configuration for PBXNativeTarget "MythwatchPhone" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D637HR5735;
+				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = MythwatchTestSupport.o;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MythwatchPhone-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Mythwatch;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daleemartin.Mythwatch;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A1B2C3D40000000000000144 /* Debug configuration for PBXNativeTarget "MythwatchPhoneUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D637HR5735;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daleemartin.MythwatchPhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MythwatchPhone;
+			};
+			name = Debug;
+		};
+		A1B2C3D40000000000000145 /* Release configuration for PBXNativeTarget "MythwatchPhoneUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D637HR5735;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daleemartin.MythwatchPhoneUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MythwatchPhone;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -480,6 +741,22 @@
 			);
 			defaultConfigurationName = Release;
 		};
+		A1B2C3D40000000000000140 /* Build configuration list for PBXNativeTarget "MythwatchPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40000000000000142 /* Debug configuration for PBXNativeTarget "MythwatchPhone" */,
+				A1B2C3D40000000000000143 /* Release configuration for PBXNativeTarget "MythwatchPhone" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D40000000000000141 /* Build configuration list for PBXNativeTarget "MythwatchPhoneUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D40000000000000144 /* Debug configuration for PBXNativeTarget "MythwatchPhoneUITests" */,
+				A1B2C3D40000000000000145 /* Release configuration for PBXNativeTarget "MythwatchPhoneUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -499,6 +776,18 @@
 			productName = MythBackendV35;
 		};
 		A1B2C3D400000000000000E4 /* MythwatchTestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MythwatchTestSupport;
+		};
+		A1B2C3D40000000000000120 /* MythwatchFeatures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MythwatchFeatures;
+		};
+		A1B2C3D40000000000000121 /* MythBackendV35 */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MythBackendV35;
+		};
+		A1B2C3D40000000000000122 /* MythwatchTestSupport */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MythwatchTestSupport;
 		};

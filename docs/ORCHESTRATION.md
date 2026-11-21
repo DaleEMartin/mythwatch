@@ -296,6 +296,16 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   (D637HR5735), so the project needed no change; Xcode had cached the free 7-day profiles, which
   were moved aside to force new ones. The new profile runs to 2027-11-20, and that build is
   installed on the owner's Apple TV.
+- **Milestone 6 (iPhone app) planned and M6-1 done** (2026-11-21, direct Opus session; the owner
+  asked for a plan and work to proceed while away). Plan in `TASKS.md` Milestone 6; SPEC §11 now
+  has "Layout". `MythwatchPhone` (iOS 26, iPhone and iPad) and `MythwatchPhoneUITests` targets and
+  scheme; shared files moved to `Mythwatch/Common/` (in both targets) instead of a package target
+  for the engine (reason in SPEC §11). `check-deps.sh` covers `Common/` and `MythwatchPhone/`.
+  Placeholder phone root, one launch UI test (passes on the iPhone 18 Pro simulator); iPhone icon
+  is the tvOS App Store layers flattened and centre-cropped to 1024 (sketch quality). The tvOS
+  UI suite passes after the move (16 tests, 1 skipped). **Planner's defaults to confirm:** iPad
+  included; same bundle id as tvOS (`com.daleemartin.Mythwatch`, universal purchase); home
+  network or VPN only.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

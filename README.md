@@ -109,7 +109,7 @@ that supports it.
    requests only), and write that version's wire contract alongside `docs/BACKEND-V35.md`.
 4. Make the shared adapter conformance suite (`AdapterConformance`, SPEC §9.1) pass for the new
    adapter.
-5. Register the factory in `Mythwatch/Mythwatch/App/Composition.swift`, and add the target to
+5. Register the factory in `Mythwatch/Common/App/Composition.swift`, and add the target to
    the dependency table in SPEC §2 and `Tools/check-deps.sh`.
 
 The full procedure is in SPEC §4, "Adding a backend version".

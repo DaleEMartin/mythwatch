@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- MythTV backends serve plain HTTP on the LAN. NSAllowsLocalNetworking permits that for
+	     IP addresses, .local names, and single-label host names, and nothing else. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Mythwatch connects to your MythTV backend on your home network to browse and play your recordings.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mythbackend._tcp</string>
+	</array>
+</dict>
+</plist>

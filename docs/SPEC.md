@@ -51,12 +51,17 @@ mythwatch/
       MythwatchDomainTests/  MythwatchBackendTests/  MythBackendV35Tests/
       MythwatchPlaybackTests/  MythwatchFeaturesTests/
       MythBackendV35Tests/Fixtures/     captured, sanitised JSON
-  Mythwatch/                       tvOS app
-    Mythwatch.xcodeproj
-    Info.plist
-    Mythwatch/                     SwiftUI views, VLCPlayerEngine, App/Composition.swift (composition root),
-                                   Assets.xcassets (app icon and Top Shelf images; Medusa artwork)
+  Mythwatch/                       the apps (tvOS, and iPhone / iPad from M6; §11)
+    Mythwatch.xcodeproj            schemes Mythwatch (tvOS) and MythwatchPhone (iOS)
+    Info.plist  MythwatchPhone-Info.plist
+    Common/                        in both app targets: App/Composition.swift (composition root),
+                                   Player/VLCPlayerEngine.swift, Player/NowPlaying.swift,
+                                   Labels.swift, ArtworkImage.swift, DeleteChoices.swift
+    Mythwatch/                     tvOS SwiftUI views, Assets.xcassets (app icon and Top Shelf
+                                   images; Medusa artwork)
     MythwatchUITests/
+    MythwatchPhone/                iPhone / iPad SwiftUI views and assets
+    MythwatchPhoneUITests/
   Tools/capture-fixtures.sh  Tools/check-deps.sh
 ```
 
@@ -76,7 +81,7 @@ may import none of our modules). Run it with `swift test`; keep its table identi
 | `MythwatchPlayback` | `MythwatchDomain` |
 | `MythwatchFeatures` | `MythwatchDomain`, `MythwatchBackend`, `MythwatchPlayback` |
 | `MythwatchTestSupport` | all of the above except `MythBackendV35` |
-| App target | `MythwatchFeatures` and the layers under it (`MythwatchDomain`, `MythwatchBackend`, `MythwatchPlayback`) for their types; `MythBackendV35` in `App/Composition.swift` only (registration); `MythwatchTestSupport` in `App/Composition.swift` only, inside `#if DEBUG`, and linked into Debug builds only (§7 "UI tests"); VLCKit in `VLCPlayerEngine.swift` only |
+| App targets (tvOS and iOS, and `Common/`) | `MythwatchFeatures` and the layers under it (`MythwatchDomain`, `MythwatchBackend`, `MythwatchPlayback`) for their types; `MythBackendV35` in `App/Composition.swift` only (registration); `MythwatchTestSupport` in `App/Composition.swift` only, inside `#if DEBUG`, and linked into Debug builds only (§7 "UI tests"); VLCKit in `VLCPlayerEngine.swift` only |
 
 Each test target depends on the target it tests and may also depend on `MythwatchTestSupport`
 (and through it on the targets that one may use). `MythwatchTestSupport` has no test target of
@@ -1369,7 +1374,7 @@ stock control cannot do the job.
 | Settings | Backend (address, detected version, adapter, Test Connection), discovered backends, Playback (skip steps, deinterlace, ask before deleting), Commercials (mode), About (version, licences from the bundled `THIRD_PARTY_NOTICES.md`). Saves on leaving the tab when `canSave` (owner, 2026-11-15); the address hint shows while the text is invalid. Discovery runs while the screen is shown (also on Onboarding). |
 
 Screen wording that is not a `UserMessage`, an `addressHint` or a `StartOption.title` lives in one
-app file, `Shared/Labels.swift`. A page that makes its model on appear must put a view on screen
+app file, `Common/Labels.swift` (shared by both apps, §11). A page that makes its model on appear must put a view on screen
 before the model exists (an empty view never appears, so the model would never be made).
 
 **Delete dialog** (M5-1; owner, 2026-11-15 and 2026-11-16). Every Delete opens a dialog, whatever
@@ -1479,7 +1484,7 @@ The pinned build is **TVVLCKit 3.7.4**, libVLC 3.0.24, **built from source witho
 `Tools/build-vlckit.sh` builds it and installs it into the git-ignored `Vendor/`; the project
 embeds `Vendor/TVVLCKit.xcframework`. Run the script once after cloning, before building the app.
 Do not go back to a prebuilt TVVLCKit that contains zvbi. `Tools/fetch-vlckit.sh` fetches
-VideoLAN's prebuilt MobileVLCKit 3.7.4 for the later iPhone app; it still contains zvbi and must be
+VideoLAN's prebuilt MobileVLCKit 3.7.4 for the iPhone app (M6); it still contains zvbi and must be
 built the same way before an iPhone release.
 
 `Info.plist` additions: `NSAppTransportSecurity > NSAllowsLocalNetworking = true`,
@@ -1718,10 +1723,10 @@ When a check is added, add its broken-adapter test there too.
 | Top Shelf extension | Reads `Library.continueWatching` via an app group |
 | iPhone app | Second app over the same `MythwatchKit`; see section 11 |
 
-## 11. The later iPhone app
+## 11. The iPhone app
 
-The owner wants an iPhone version eventually. It is not built in the first release, but the
-first release must not make it harder. The intended shape: a second app (or a second
+The owner wants an iPhone version (2026-11-14) and asked for it to be planned and started on
+2026-11-21 (Milestone 6). The tvOS release must not be made harder by it. The intended shape: a second app (or a second
 destination of the same app target; decide when it is built) with its own SwiftUI views for
 touch, sharing all of `MythwatchKit` and the VLC engine.
 
@@ -1737,9 +1742,22 @@ Rules that apply now:
   those calls (section 7, "Player controls") belongs to the tvOS views.
 - **The VLCKit choice must cover iOS.** The distribution picked in M0-3 must also ship an iOS
   build of the same version with the same API, dynamically linked. A tvOS-only build is rejected.
-- **`VLCPlayerEngine` uses nothing tvOS-only.** It will be shared by both apps. When the iPhone
-  app is started it moves out of the tvOS app target into a place both apps can link (a small
-  package target that depends on VLCKit); until then it stays where section 7 puts it.
+- **`VLCPlayerEngine` uses nothing tvOS-only.** It is shared by both apps.
+
+**Layout (M6-1, 2026-11-21).** One Xcode project, two app targets: `Mythwatch` (tvOS) and
+`MythwatchPhone` (iOS 26, iPhone and iPad), each with its own UI test target and scheme.
+Files that build for both live in `Mythwatch/Common/`, a synchronised folder that is a member of
+both targets: the composition root, `VLCPlayerEngine`, `NowPlaying`, `Labels`, `ArtworkImage`,
+`DeleteChoices`. A file moves into `Common/` only when it builds unchanged on both platforms;
+screens stay per platform. `VLCPlayerEngine` picks `TVVLCKit` or `MobileVLCKit` with `#if os(tvOS)`.
+*Why not a package target for the engine* (what this section said before): VLCKit is fetched or
+built into the git-ignored `Vendor/`, so a package `binaryTarget` pointing at it would make
+`swift test` fail in CI and on any clone that has not run `Tools/fetch-vlckit.sh`, and the
+package would no longer be "no VLCKit" (§2). A shared app folder keeps the package untouched.
+The iOS app uses the same bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store
+record, universal purchase; planner's default, to confirm with the owner).
+
+Milestone 6 in `docs/TASKS.md` holds the iPhone tasks.
 
 Known work the iPhone app will add, none of it scheduled:
 

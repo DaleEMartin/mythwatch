@@ -278,6 +278,60 @@ navigation), VoiceOver labels, Reduce Motion, large text checks on every screen.
 `THIRD_PARTY_NOTICES.md` (VLCKit/libVLC LGPL text and source offer per `docs/VLCKIT.md`), app
 icon and Top Shelf image placeholders, in-app About/licences screen.
 
+## Milestone 6: the iPhone app (SPEC §11)
+
+Planned 2026-11-21 at the owner's request ("make a plan and let's start working on it"). Shape:
+a second app target, `MythwatchPhone`, in the same Xcode project, with its own touch views and
+the platform-neutral app files shared with the tvOS target (SPEC §11 "Layout"). Defaults the
+planner chose, to confirm with the owner: iPhone and iPad (one universal target); the same
+bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store record, universal purchase);
+home network or VPN only. AirPlay, Picture in Picture and downloads are not in this milestone.
+
+### M6-1 Shared app code and the iPhone target shell — Opus
+- Move the app files that build for both platforms into `Mythwatch/Shared/`, a synchronised group
+  in both targets: the composition root, `VLCPlayerEngine`, Now Playing, artwork, labels,
+  messages, delete choices. tvOS-only files stay in `Mythwatch/Mythwatch/`.
+- Add the `MythwatchPhone` iOS 26 app target (`Mythwatch/MythwatchPhone/`, its own `Info.plist`
+  with the same network keys), the `MythwatchPhoneUITests` target and a shared `MythwatchPhone`
+  scheme. Embed `Vendor/MobileVLCKit.xcframework`; Debug-only `MythwatchTestSupport` as on tvOS.
+- `Tools/check-deps.sh` covers `Shared/` and `MythwatchPhone/` with the app-target rules.
+- A placeholder root that connects (`-MythwatchFakes` works) and one launch UI test.
+- **Done when:** both schemes build and their UI tests pass on simulators; `swift test` and
+  `check-deps.sh` pass; the tvOS app is unchanged in behaviour.
+
+### M6-2 Leaving the foreground — Sonnet ∥ (after M6-1)
+`TransportModel.leftForeground()` pauses (which saves the position, SPEC §5.2) and records that
+it did; returning does not auto-play. Package tests first. Both player screens call it when the
+scene leaves `.active`. Audio session category `.playback` on iOS so sound plays with the
+silent switch on.
+
+### M6-3 iPhone library and settings screens — Opus (after M6-1)
+Root (onboarding or tabs), Onboarding, Recordings (Continue Watching and Recently Recorded as
+horizontal shelves, shows as an adaptive grid), Show, Episode detail, Settings, Licences, delete
+dialog, pull to refresh. Same models as tvOS; no new logic in views. UI tests on the fakes:
+onboarding, library to episode, delete dialog, settings, empty / unreachable states.
+
+### M6-4 iPhone player screen — Opus (after M6-1, M6-2)
+Full-screen VLC view; tap toggles controls; play/pause, skip back/forward, a scrubber that
+drives scrub preview / commit / cancel, commercial banner and break segments, audio and caption
+track menus, Set Bookmark, close. Landscape and portrait. UI tests on the fakes (play, skip,
+close saves, commercial Go Back).
+
+### M6-5 Now Playing and remote commands — Sonnet ∥ (after M6-4)
+Lock-screen and Control Centre controls on iPhone through the shared Now Playing code; check
+that skip intervals follow the settings.
+
+### M6-6 MobileVLCKit without zvbi — Opus ∥ (long unattended build)
+Extend `Tools/build-vlckit.sh` to build MobileVLCKit 3.7.4 from source with zvbi off, arm64
+only (no armv7), as was done for tvOS (owner, 2026-11-17: "get rid of zvbi"). Check no `vbi_`
+symbols and the same public symbols as VideoLAN's binary; update `docs/VLCKIT.md`,
+`THIRD_PARTY_NOTICES.md` and `Tools/fetch-vlckit.sh`.
+
+### M6-7 On the owner's iPhone — owner present
+Install a Debug build; run the manual acceptance list below on the phone (items 1-7, 9-10), plus:
+lock the phone mid-playback (paused, position saved), lock-screen controls, rotation, a call or
+Siri interrupting playback.
+
 ---
 
 ## Manual acceptance (end of M4, repeated at M5)
