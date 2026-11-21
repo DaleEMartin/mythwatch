@@ -594,3 +594,74 @@ struct TransportLeavingTheForegroundTests {
         #expect(Array(rig.engine.calls.dropFirst(before)) == [.pause])
     }
 }
+
+/// M6-4 (SPEC 6.4 "Touch"): the phone's scrubber drags to a place on the timeline, and a tap on
+/// the picture shows or hides the controls.
+@MainActor @Suite(.timeLimit(.minutes(1)))
+struct TransportTouchTests {
+    @Test func scrubbingToAPlaceWhilePausedPreviewsAndCommits() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(to: .seconds(1200))
+        #expect(rig.model.scrubPosition == .seconds(1200))
+        #expect(rig.model.elapsedText == "20:00")
+        #expect(rig.model.scrubPreviewAt == rig.clock.now() + TransportModel.scrubPreviewDelay)
+        rig.advance(TransportModel.scrubPreviewDelay)
+        #expect(rig.seeks == [.seconds(1200)])
+        rig.model.scrub(to: .seconds(1300))
+        rig.model.commitScrub()
+        #expect(rig.model.scrubPosition == nil)
+        #expect(rig.seeks == [.seconds(1200), .seconds(1300)])
+    }
+
+    @Test func scrubbingToAPlaceWhilePlayingSeeksOnlyOnCommit() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(600))
+        rig.model.scrub(to: .seconds(900))
+        #expect(rig.model.scrubPosition == .seconds(900))
+        #expect(rig.model.scrubPreviewAt == nil)
+        rig.advance(.seconds(10))
+        #expect(rig.seeks.isEmpty)
+        #expect(rig.model.controlsVisible, "the controls stay up while dragging")
+        rig.model.commitScrub()
+        #expect(rig.seeks == [.seconds(900)])
+        #expect(rig.engine.snapshot.status == .playing)
+    }
+
+    @Test func cancellingADragWhilePlayingLeavesTheVideoAlone() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(600))
+        rig.model.scrub(to: .seconds(900))
+        rig.model.cancelScrub()
+        #expect(rig.model.scrubPosition == nil)
+        #expect(rig.seeks.isEmpty)
+    }
+
+    @Test func aScrubToAPlaceStaysWithinTheRecording() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(600))
+        rig.model.scrub(to: .seconds(-5))
+        #expect(rig.model.scrubPosition == .zero)
+        rig.model.scrub(to: .seconds(5000))
+        #expect(rig.model.scrubPosition == .seconds(3600))
+    }
+
+    @Test func aTapHidesVisibleControlsWhilePlayingAndShowsHiddenOnes() async {
+        let rig = TransportRig()
+        await rig.playing(at: .seconds(100))
+        #expect(rig.model.controlsVisible)
+        rig.model.toggleControls()
+        #expect(!rig.model.controlsVisible)
+        #expect(rig.model.hideAt == nil)
+        rig.model.toggleControls()
+        #expect(rig.model.controlsVisible)
+        #expect(rig.model.hideAt == rig.clock.now() + TransportModel.hideAfter)
+    }
+
+    @Test func aTapWhilePausedKeepsTheControls() async {
+        let rig = TransportRig()
+        await rig.paused(at: .seconds(100))
+        rig.model.toggleControls()
+        #expect(rig.model.controlsVisible)
+    }
+}

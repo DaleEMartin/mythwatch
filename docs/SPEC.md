@@ -1242,6 +1242,12 @@ nothing, so a loaded session and the screens and navigation built on it stay as 
 - **Back.** `back()` cancels a scrub, else closes the panel (`.handled`), else returns `.leave`
   and the screen closes.
 - `play()` / `pause()` act only when they change something (remote commands, not toggles).
+- **Touch** (M6-4, SPEC 11). `scrub(to:)` is the phone scrubber's drag: it begins or moves a
+  scrub to an absolute place, clamped to `0...duration`, whether playing or paused. While playing
+  the video plays on, no preview is scheduled and only `commitScrub()` seeks (cancel seeks
+  nothing); while paused the frame preview works as for `scrub(by:)`. `toggleControls()` is a tap
+  on the picture: while playing with the controls up (and no scrub or panel) it hides them at
+  once; otherwise it is `showControls()`.
 - **Leaving the foreground** (M6-2, SPEC 11). `leftForeground()` cancels a scrub (putting a
   previewed video back) and then acts as `pause()`, so a playing video pauses and the position is
   saved (§5.2 "Other saves"). Nothing happens on return: the controls are up and the viewer
@@ -1770,8 +1776,20 @@ points wide); Show as a plain list with the fanart and title on top, a segmented
 for up to three seasons and a menu above that, and per episode a swipe to the left for Delete, a
 swipe to the right for Mark Watched / Unwatched, and the same two in the context menu; Episode
 detail as one scrolling column with full-width start buttons and Delete, the synopsis last;
-Onboarding and Settings as forms; Licences as selectable text. Delete dialogs, messages and
-banners follow §7. Same accessibility identifiers as the tvOS screens, so UI tests read alike.
+Onboarding and Settings as forms; Licences as selectable text. Delete dialogs follow §7 but are
+alerts, not confirmation dialogs: on iPhone, iOS 26 draws a confirmation dialog as a popover
+without its cancel button, so Cancel and Keep would be hidden. Messages and banners follow §7. Same accessibility identifiers as the tvOS screens, so UI tests read alike.
+
+**iPhone player (M6-4).** Full-screen VLC picture under our controls, in any orientation. A tap
+on the picture is `toggleControls()`. Controls: Close and the titles at the top with a "more"
+button that opens the panel; skip back, play/pause and skip forward in the middle (numbered skip
+symbols when SF Symbols has one for the step); the scrubber with break segments and the times at
+the bottom. Dragging anywhere along the scrubber is `scrub(to:)` for the finger's place, lifting
+commits. VoiceOver adjusts the scrubber by the skip steps. The commercial banner's Go Back / Skip
+Commercials are real buttons, above the bar. The panel (Info with Set Bookmark Here, Audio,
+Subtitles) is a sheet with medium and large detents; Done or a swipe down is `closePanel()`. The
+status bar and home indicator hide with the controls. The player calls `leftForeground()` on
+`.background`, finishes and offers delete as on tvOS.
 
 Milestone 6 in `docs/TASKS.md` holds the iPhone tasks.
 

@@ -63,10 +63,11 @@ struct ShowView: View {
         } message: { problem in
             Text(problem.detail)
         }
-        .confirmationDialog(
+        // An alert, so Cancel shows (see EpisodePage).
+        .alert(
             pendingDelete.map(Labels.deleteQuestion) ?? "", isPresented: Binding(
                 get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible, presenting: pendingDelete
+            presenting: pendingDelete
         ) { recording in
             DeleteChoices { model.delete(recording, allowRerecord: $0) }
         } message: { _ in

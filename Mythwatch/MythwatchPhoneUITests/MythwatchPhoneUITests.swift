@@ -86,10 +86,13 @@ final class MythwatchPhoneUITests: XCTestCase {
         launch()
         let title = openGardenEpisode()
         app.buttons["detail.delete"].tap()
-        // The iOS 26 dialog exposes each button twice (sheet and its popover form): take the first.
-        let rerecord = app.buttons["delete.rerecord"].firstMatch
-        XCTAssertTrue(rerecord.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["delete.noRerecord"].firstMatch.exists)
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        // iOS 26 lists each alert button twice in the accessibility tree: take the first.
+        let rerecord = alert.buttons["Delete and Let MythTV Record It Again"].firstMatch
+        XCTAssertTrue(rerecord.exists)
+        XCTAssertTrue(alert.buttons["Delete"].exists)
+        XCTAssertTrue(alert.buttons["Cancel"].exists)
         attachScreenshot("4-delete-dialog")
         rerecord.tap()
         XCTAssertTrue(app.staticTexts["show.title"].waitForExistence(timeout: 5))
@@ -126,5 +129,89 @@ final class MythwatchPhoneUITests: XCTestCase {
         app.buttons["message.retry"].tap()
         XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.otherElements["message.screen"].exists)
+    }
+
+    // MARK: Player (M6-4)
+
+    /// From the episode page to the player and back. Skip forward moves 30 s; playing with no
+    /// input hides the controls after 5 s, and a tap on the picture brings them back.
+    func testPlayFromTheEpisodePageThenClose() {
+        launch()
+        let title = openGardenEpisode()
+        app.buttons["detail.start.beginning"].tap()
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        let transport = app.otherElements["player.transport"]
+        XCTAssertTrue(transport.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "0:00")
+        app.buttons["player.skipForward"].tap()
+        let skipped = expectation(for: NSPredicate(format: "label == %@", "0:30"), evaluatedWith: app.staticTexts["player.elapsed"])
+        wait(for: [skipped], timeout: 5)
+        attachScreenshot("7-player")
+
+        let hidden = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: transport)
+        wait(for: [hidden], timeout: 10)
+        app.otherElements["player.surface"].tap()
+        XCTAssertTrue(transport.waitForExistence(timeout: 3))
+
+        app.buttons["player.close"].tap()
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["detail.title"].label, title)
+        XCTAssertFalse(app.otherElements["player.screen"].exists)
+    }
+
+    /// M4-3 on the phone: the demo film resumes inside a break, the skip happens at once, and
+    /// Go Back returns to 2 s before where it was.
+    func testResumingIntoABreakSkipsItAndGoBackReturns() {
+        launch()
+        XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
+        app.buttons["card.continueWatching.113"].tap()
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
+        app.buttons["detail.start.resume"].tap()
+
+        let goBack = app.buttons["player.banner.goBack"]
+        XCTAssertTrue(goBack.waitForExistence(timeout: 5), "the skipped banner shows")
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "1:02:59")
+        XCTAssertEqual(app.staticTexts["player.banner.skippedText"].label, "Skipped commercials \u{00B7} 0:56")
+        attachScreenshot("8-player-skipped")
+        goBack.tap()
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: goBack)
+        wait(for: [gone], timeout: 3)
+        XCTAssertEqual(app.staticTexts["player.elapsed"].label, "1:02:01")
+    }
+
+    /// The tracks and info sheet: Set Bookmark Here is in it, and Done closes it.
+    func testTheInfoSheetHasTheBookmarkButton() {
+        launch()
+        openGardenEpisode()
+        app.buttons["detail.start.beginning"].tap()
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        app.buttons["player.more"].tap()
+        XCTAssertTrue(app.buttons["player.bookmark"].waitForExistence(timeout: 5))
+        attachScreenshot("9-player-sheet")
+        app.buttons["player.panel.done"].tap()
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.buttons["player.bookmark"])
+        wait(for: [gone], timeout: 5)
+        XCTAssertTrue(app.otherElements["player.screen"].exists)
+    }
+
+    /// M5-1 on the phone: playing to the end closes the player and offers a delete; Keep leaves
+    /// the recording alone.
+    func testWatchingToTheEndOffersADelete() {
+        launch()
+        openGardenEpisode()
+        app.buttons["detail.start.beginning"].tap()
+        let player = app.otherElements["player.screen"]
+        XCTAssertTrue(player.waitForExistence(timeout: 5))
+        let skip = app.buttons["player.skipForward"]
+        // 30-minute episode, 30 s skips: at most 60 taps reach the end.
+        for _ in 0..<70 where player.exists && skip.exists { skip.tap() }
+        let keep = app.alerts.buttons["Keep"].firstMatch
+        XCTAssertTrue(keep.waitForExistence(timeout: 5), "the delete offer shows after the end")
+        XCTAssertTrue(app.alerts.buttons["Delete and Let MythTV Record It Again"].exists)
+        attachScreenshot("10-finished-offer")
+        keep.tap()
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: keep)
+        wait(for: [gone], timeout: 5)
+        XCTAssertTrue(app.staticTexts["detail.title"].exists, "Keep leaves the episode page up")
     }
 }

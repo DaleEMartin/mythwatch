@@ -62,6 +62,14 @@ enum Labels {
         }
     }
     static let setBookmark = "Set Bookmark Here"
+    // Touch player controls (iPhone, M6-4): spoken names for the icon buttons.
+    static let play = "Play"
+    static let pause = "Pause"
+    static func skipForward(seconds: Int) -> String { "Skip Forward \(seconds) Seconds" }
+    static func skipBack(seconds: Int) -> String { "Skip Back \(seconds) Seconds" }
+    static let infoAndTracks = "Info, Audio and Subtitles"
+    static let done = "Done"
+    static let video = "Video"
     /// The banner after a commercial skip (M4-3): "Skipped commercials · 2:56".
     static func skippedCommercials(_ distance: Duration) -> String {
         "Skipped commercials \u{00B7} \(TransportModel.timeText(distance))"

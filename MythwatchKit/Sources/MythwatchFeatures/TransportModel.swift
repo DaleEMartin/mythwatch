@@ -293,6 +293,33 @@ import Observation
     }
 
     /// Seeks to the preview and ends the scrub. Does not play.
+    /// A drag on a touch scrubber (SPEC 6.4 "Touch", M6-4): begins or moves a scrub to a place on
+    /// the timeline, kept within the recording. Unlike `scrub(by:)` it works while playing too;
+    /// the video plays on and only a commit seeks. While paused, a resting drag previews that
+    /// frame as `scrub(by:)` does.
+    public func scrub(to requested: Duration) {
+        if scrubPosition == nil {
+            scrubOrigin = session.snapshot.position
+            previewed = nil
+        }
+        var target = max(.zero, requested)
+        if let duration { target = min(target, duration) }
+        scrubPosition = target
+        scrubPreviewAt = session.snapshot.status == .paused ? now() + Self.scrubPreviewDelay : nil
+        showControls()
+    }
+
+    /// A tap on the picture (SPEC 6.4 "Touch"): hides the controls while playing if they are up,
+    /// otherwise shows them. While not playing they always stay up.
+    public func toggleControls() {
+        if controlsVisible, isPlaying, scrubPosition == nil, panel == nil {
+            controlsVisible = false
+            updateHideAt()
+        } else {
+            showControls()
+        }
+    }
+
     public func commitScrub() {
         guard let target = scrubPosition else { return }
         endScrub(restore: false)

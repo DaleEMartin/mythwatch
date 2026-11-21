@@ -318,6 +318,15 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   start buttons do nothing until M6-4. Not looked at on iPad or in landscape. **The Licences
   screen bundles the tvOS notices** (TVVLCKit without zvbi), which is wrong for the iPhone build
   while it embeds VideoLAN's MobileVLCKit with zvbi: M6-6 fixes it before any release.
+- **M6-4 done and committed** (2026-11-21, same session): the iPhone player
+  (`MythwatchPhone/Player/PlayerScreen.swift`), rules in SPEC §11 "iPhone player". Model
+  additions, tests first: `TransportModel.scrub(to:)` and `toggleControls()` (6 tests in
+  "TransportTouchTests", SPEC 6.4 "Touch"). The phone's delete dialogs became alerts (iOS 26 hides
+  a confirmation dialog's cancel button on iPhone). 11 phone UI tests pass (new: play and close,
+  resume into a break and Go Back, the info sheet, watch to the end and Keep). iOS 26 lists alert
+  and dialog buttons twice to XCUITest; the tests take `firstMatch`. Not checked: real VLC
+  playback on an iPhone (simulator played only the fakes in this task; M0-3 did play a real
+  stream in an iOS simulator), rotation, iPad layout.
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through
