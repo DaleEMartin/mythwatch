@@ -354,6 +354,12 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   times (jobs 8805, 8807: "Failed with Exit Status 140"), so the channel was set back to -1 (global)
   the same evening. A normal re-flag (job 8808, method 7) completed in about 20 min with the same 3
   breaks. Backend settings are as they were before; only 2465's markup was regenerated (unchanged).
+- **Nominated recording for M6-7** (owner, 2026-11-21: "pick any Pawn Stars episode", may be
+  deleted at the end): recording id **3774**, *Pawn Stars*, "Man. Make. Fire." (DEFY, recorded
+  2026-11-16 06:00 UTC, group Default). Found by GET: two breaks (13:54-15:54, 30:06-30:30), not
+  watched, no position, no bookmark. Only 3774 may receive a POST in M6-7. The real backend host
+  name is not "basement" (that is the placeholder from the 2026-11-19 history rewrite); the owner
+  gave it in the session; keep it out of the repo.
 - **Nominated recording for M3-5 and M5-1** (owner, 2026-11-15): recording id **3749**, *Austin
   City Limits*, "Sebastián Yatra" (KMWA-HD, recorded 2026-11-15 04:00 UTC, file
   `16817_20261115040000.ts`, status Recorded, group Default; confirmed by GET). M3-5 may write its
