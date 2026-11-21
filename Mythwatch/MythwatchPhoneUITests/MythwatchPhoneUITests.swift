@@ -104,7 +104,9 @@ final class MythwatchPhoneUITests: XCTestCase {
     func testSettingsShowsTheConnectedBackendAndTheLicences() {
         launch()
         XCTAssertTrue(app.scrollViews["library.screen"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Settings"].tap()
+        // iPhone: the tab bar at the bottom. iPad: the tabs at the top, not reported as a tab bar.
+        let tab = app.tabBars.buttons["Settings"]
+        (tab.exists ? tab : app.buttons["Settings"].firstMatch).tap()
         XCTAssertTrue(app.textFields["address.field"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["address.field"].value as? String, "demo-backend:6544")
         attachScreenshot("5-settings")
@@ -220,5 +222,25 @@ final class MythwatchPhoneUITests: XCTestCase {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: keep)
         wait(for: [gone], timeout: 5)
         XCTAssertTrue(app.staticTexts["detail.title"].exists, "Keep leaves the episode page up")
+    }
+
+    /// The player turns with the phone, and its controls still work in landscape.
+    func testThePlayerWorksInLandscape() {
+        launch()
+        openGardenEpisode()
+        app.buttons["detail.start.beginning"].tap()
+        XCTAssertTrue(app.otherElements["player.screen"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let skip = app.buttons["player.skipForward"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
+        skip.tap()
+        let skipped = expectation(for: NSPredicate(format: "label == %@", "0:30"), evaluatedWith: app.staticTexts["player.elapsed"])
+        wait(for: [skipped], timeout: 5)
+        XCTAssertTrue(app.buttons["player.close"].isHittable)
+        attachScreenshot("11-player-landscape")
+        app.buttons["player.close"].tap()
+        XCTAssertTrue(app.staticTexts["detail.title"].waitForExistence(timeout: 5))
     }
 }

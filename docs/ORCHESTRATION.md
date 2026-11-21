@@ -336,6 +336,11 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   and CLAUDE.md list the phone scheme. **After cloning, run both `Tools/build-vlckit.sh` and
   `Tools/build-vlckit.sh ios`.** Not checked: real playback with this build (the UI tests use the
   fakes; playing a live recording would POST its position, rule 4).
+- **iPad and landscape** (2026-11-21, same session): the phone UI suite passes on the iPad mini
+  (A20 Pro) simulator after one test fix (iPad's tabs are not reported as a tab bar); library and
+  player screenshots look right there. New `testThePlayerWorksInLandscape` passes on the iPhone
+  (rotates, skips, Close is hittable), but its screenshot came out clipped (captured in portrait
+  while the app was in landscape), so the landscape *look* is unchecked. 12 phone UI tests.
 - **M6-5 needs the owner** (2026-11-21): `NowPlaying` is shared and the phone player attaches it,
   but M6-2 pauses on `.background` and the app has no background-audio mode, so lock-screen
   controls can only show a paused item. Question for the owner: keep playing audio when the phone
