@@ -36,6 +36,9 @@ import MythwatchPlayback
         update()
     }
 
+    /// Whether a transport is attached (the iPhone player detaches while in the background).
+    var isAttached: Bool { transport != nil }
+
     func detach() {
         for (command, target) in targets { command.removeTarget(target) }
         targets = []

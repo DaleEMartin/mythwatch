@@ -354,6 +354,21 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   times (jobs 8805, 8807: "Failed with Exit Status 140"), so the channel was set back to -1 (global)
   the same evening. A normal re-flag (job 8808, method 7) completed in about 20 min with the same 3
   breaks. Backend settings are as they were before; only 2465's markup was regenerated (unchanged).
+- **M6-7 on the owner's iPhone** (2026-11-21, iPhone18,2; Debug build installed with `devicectl`,
+  over Wi-Fi after the first time; profile to 2027-11-21; the device was registered with
+  `-allowProvisioningDeviceRegistration`). Checked by the owner on 3774: connect, browse, play,
+  skips, scrubbing, commercial skip and Go Back, rotation, Control Centre, the sheet, captions,
+  bookmark, close. Read back by GET: lock at 16:17 saved 16:16.7; after closing, position 19:23,
+  bookmark 19:04.6, flags BOOKMARK and LASTPLAYPOS. **Two bugs found and fixed** (committed with
+  this note): (1) no sound after locking and unlocking: VLC's iOS audio output (`audiounit_ios`)
+  marks itself silent on an audio-session interruption and only recovers on "should resume",
+  which iOS does not send after a suspension; `VLCPlayerEngine` (iOS only) now notes an
+  interruption or a move to the background, and the next `play()` re-selects the audio track,
+  which makes VLC restart its output. Owner: sound came back. (2) Play on the lock screen started
+  VLC unseen and unheard and the position ran on; the phone player now detaches Now Playing on
+  `.background` and attaches it again on `.active`. Owner: works. **Captions:** CC1-CC4 listed;
+  the text is small on a phone and was hidden under the controls' dimming; the owner is fine with
+  the size (no change). Delete of 3774 still to do. Not done: a call or Siri interruption.
 - **Nominated recording for M6-7** (owner, 2026-11-21: "pick any Pawn Stars episode", may be
   deleted at the end): recording id **3774**, *Pawn Stars*, "Man. Make. Fire." (DEFY, recorded
   2026-11-16 06:00 UTC, group Default). Found by GET: two breaks (13:54-15:54, 30:06-30:30), not

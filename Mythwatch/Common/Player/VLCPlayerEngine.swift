@@ -5,6 +5,9 @@ import TVVLCKit
 #else
 import MobileVLCKit
 #endif
+#if os(iOS)
+import AVFoundation
+#endif
 import Foundation
 import MediaAccessibility
 import MythwatchPlayback
@@ -52,6 +55,12 @@ final class VLCPlayerEngine: NSObject, PlayerEngine {
     private var url: URL?
     /// Bumped by every `load`, so a size answer for earlier media is dropped.
     private var generation = 0
+    /// iOS: the audio session was interrupted (a call, Siri) or the app went to the background
+    /// (locking the phone). VLC's iOS audio output marks itself silent on an interruption and only
+    /// recovers when iOS says to resume, which it does not after a suspension: the picture plays
+    /// on with no sound (M6-7, found on the owner's iPhone). Re-selecting the audio track makes
+    /// VLC stop and start its audio output, which rebuilds it; `play()` does that once.
+    private var audioNeedsRestart = false
 
     /// `deinterlace` is `AppSettings.deinterlace` at the moment playback starts: `bob` when true
     /// (60 fps, no measurable cost on Apple TV HD), none when false. Never `yadif`.
@@ -64,6 +73,14 @@ final class VLCPlayerEngine: NSObject, PlayerEngine {
         super.init()
         player.delegate = self
         player.drawable = videoView
+        #if os(iOS)
+        // Selector observers are removed by the system when the engine goes.
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(audioWasInterrupted(_:)),
+                           name: AVAudioSession.interruptionNotification, object: nil)
+        center.addObserver(self, selector: #selector(audioWasInterrupted(_:)),
+                           name: UIApplication.didEnterBackgroundNotification, object: nil)
+        #endif
     }
 
     deinit {
@@ -81,7 +98,17 @@ final class VLCPlayerEngine: NSObject, PlayerEngine {
         open(url, at: startAt)
     }
 
-    func play() { player.play() }
+    func play() {
+        player.play()
+        if audioNeedsRestart {
+            audioNeedsRestart = false
+            let track = player.currentAudioTrackIndex
+            if track >= 0 {
+                player.currentAudioTrackIndex = -1
+                player.currentAudioTrackIndex = track
+            }
+        }
+    }
 
     func pause() { player.pause() }
 
@@ -214,3 +241,12 @@ extension VLCPlayerEngine: VLCMediaPlayerDelegate {
         MainActor.assumeIsolated { timeChanged() }
     }
 }
+
+#if os(iOS)
+extension VLCPlayerEngine {
+    /// An interruption may be posted on any thread; the background notice on the main thread.
+    @objc nonisolated fileprivate func audioWasInterrupted(_ notification: Notification) {
+        Task { @MainActor in self.audioNeedsRestart = true }
+    }
+}
+#endif

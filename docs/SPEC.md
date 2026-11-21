@@ -1791,7 +1791,13 @@ commits. VoiceOver adjusts the scrubber by the skip steps. The commercial banner
 Commercials are real buttons, above the bar. The panel (Info with Set Bookmark Here, Audio,
 Subtitles) is a sheet with medium and large detents; Done or a swipe down is `closePanel()`. The
 status bar and home indicator hide with the controls. The player calls `leftForeground()` on
-`.background`, finishes and offers delete as on tvOS.
+`.background` and detaches Now Playing then, so nothing on the lock screen can start playback
+(owner, 2026-11-21: nothing plays while locked); it attaches again on `.active`. It finishes and
+offers delete as on tvOS. **Audio after an interruption** (M6-7): on iOS, `VLCPlayerEngine`
+notes an audio-session interruption or a move to the background, and its next `play()`
+re-selects the current audio track so VLC restarts its audio output (VLC 3 stays silent
+otherwise). Captions use the tvOS size (2.5 % of the picture height); small on a phone, and the
+owner is fine with that.
 
 Milestone 6 in `docs/TASKS.md` holds the iPhone tasks.
 

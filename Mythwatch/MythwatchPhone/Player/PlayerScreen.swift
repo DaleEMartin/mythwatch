@@ -120,8 +120,18 @@ private struct PlayerContent: View {
             }
         }
         .onChange(of: transport.hasEnded) { _, ended in if ended { leave() } }
-        // Locked or sent to the background: pause, which saves the place (SPEC 6.4).
-        .onChange(of: scenePhase) { _, phase in if phase == .background { transport.leftForeground() } }
+        // Locked or sent to the background: pause, which saves the place (SPEC 6.4), and leave the
+        // lock screen. Nothing plays while the phone is locked (owner, 2026-11-21): with Now
+        // Playing still attached, Play on the lock screen started VLC unseen and unheard and the
+        // position ran on (M6-7). Back in front, the controls return.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                transport.leftForeground()
+                nowPlaying.detach()
+            } else if phase == .active, !nowPlaying.isAttached {
+                nowPlaying.attach(transport, skipForward: skipForwardSeconds, skipBackward: skipBackwardSeconds)
+            }
+        }
         // The model has no timer: wake it when the controls are due to hide, ...
         .task(id: transport.hideAt) {
             guard let at = transport.hideAt else { return }
