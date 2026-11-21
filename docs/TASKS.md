@@ -325,7 +325,7 @@ that skip intervals follow the settings.
 Extend `Tools/build-vlckit.sh` to build MobileVLCKit 3.7.4 from source with zvbi off, arm64
 only (no armv7), as was done for tvOS (owner, 2026-11-17: "get rid of zvbi"). Check no `vbi_`
 symbols and the same public symbols as VideoLAN's binary; update `docs/VLCKIT.md`,
-`THIRD_PARTY_NOTICES.md` and `Tools/fetch-vlckit.sh`.
+`THIRD_PARTY_NOTICES.md` and `Tools/fetch-vlckit.sh`. **Done 2026-11-21** (`fetch-vlckit.sh` removed).
 
 ### M6-7 On the owner's iPhone — owner present
 Install a Debug build; run the manual acceptance list below on the phone (items 1-7, 9-10), plus:

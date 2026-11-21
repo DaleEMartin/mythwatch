@@ -1,13 +1,16 @@
 #!/bin/sh
-# Build TVVLCKit 3.7.4 from source without libzvbi, and install it in Vendor/ (git-ignored).
+# Build TVVLCKit (tvOS) or MobileVLCKit (iOS, M6-6) 3.7.4 from source without libzvbi, and install
+# it in Vendor/ (git-ignored).
 #
-# Why: VideoLAN's prebuilt TVVLCKit 3.7.4 links zvbi 0.2.45, whose src/packet-830.c is GPL
+# Why: VideoLAN's prebuilt TVVLCKit and MobileVLCKit 3.7.4 link zvbi 0.2.45, whose src/packet-830.c is GPL
 # version 2 only (docs/VLCKIT.md §2). Mythwatch never uses zvbi (it decodes European Teletext;
 # US recordings carry CEA-608 captions, which VLC's own `cc` decoder handles). This build is
 # VideoLAN's own release build (`buildMobileVLCKit.sh -vft`, as their CI's TVVLCKit job runs it)
 # with zvbi switched off in two places: the contrib libraries and VLC's configure. One more change:
 # the framework's deployment target is raised from tvOS 10.2 to 15.0, the oldest Xcode 27 builds
-# for (VideoLAN's CI uses Xcode 26; Mythwatch needs tvOS 26 anyway).
+# for (VideoLAN's CI uses Xcode 26; Mythwatch needs tvOS 26 anyway). For iOS the same: the script's
+# default minimum (iOS 9.0) is raised to 15.0. The iOS build is arm64 only (VLCKit's default), for
+# device and simulator, plus x86_64 for the simulator; no armv7 (docs/VLCKIT.md, SPEC 11).
 #
 # It takes a long time (VLC builds its own tools and every contrib library from source) and needs
 # only Xcode and the network: the VLCKit script puts its own tools first on PATH and ignores
@@ -20,8 +23,15 @@
 # unavailable"). VideoLAN's CI puts newer tools on VLC_PATH, so this script builds GNU make 4.4.1
 # into the work area and does the same.
 #
-# Usage: Tools/build-vlckit.sh
+# Usage: Tools/build-vlckit.sh [tvos|ios]     (default tvos)
 set -eu
+
+PLATFORM=${1:-tvos}
+case "$PLATFORM" in
+    tvos) KIT=TVVLCKit; FLAGS=-vft ;;
+    ios) KIT=MobileVLCKit; FLAGS=-vf ;;
+    *) echo "usage: $0 [tvos|ios]" >&2; exit 2 ;;
+esac
 
 VERSION=3.7.4
 COMMIT=54bba6d95502d0f3f7a9da581727935b21d55fb2   # VLCKit tag 3.7.4
@@ -29,7 +39,7 @@ COMMIT=54bba6d95502d0f3f7a9da581727935b21d55fb2   # VLCKit tag 3.7.4
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK="${MYTHWATCH_VLCKIT_WORK:-$HOME/Library/Caches/mythwatch-vlckit}/$VERSION"
 VENDOR="$ROOT/Vendor"
-LOG="$WORK.log"
+LOG="$WORK-$PLATFORM.log"
 case "$WORK" in *" "*) echo "error: the work tree path must not contain spaces: $WORK" >&2; exit 1 ;; esac
 mkdir -p "$(dirname "$WORK")" "$VENDOR"
 
@@ -66,24 +76,26 @@ checkonce() {
 checkonce '        --enable-zvbi \'
 checkonce 'SCARYFLAG="--enable-dvbpsi --enable-avcodec"'
 checkonce '               IPHONEOS_DEPLOYMENT_TARGET=${SDK_MIN} \'
+checkonce 'SDK_MIN=9.0'
 sed -i '' \
     -e 's/--enable-zvbi \\$/--disable-zvbi \\/' \
     -e 's/SCARYFLAG="--enable-dvbpsi --enable-avcodec"/SCARYFLAG="--enable-dvbpsi --enable-avcodec --disable-zvbi"/' \
     -e 's/^               IPHONEOS_DEPLOYMENT_TARGET=${SDK_MIN} \\$/               IPHONEOS_DEPLOYMENT_TARGET=${SDK_MIN} TVOS_DEPLOYMENT_TARGET=15.0 \\/' \
     "$script"
+if [ "$PLATFORM" = ios ]; then sed -i '' -e 's/^SDK_MIN=9.0$/SDK_MIN=15.0/' "$script"; fi
 checkonce '        --disable-zvbi \'
 checkonce 'SCARYFLAG="--enable-dvbpsi --enable-avcodec --disable-zvbi"'
 checkonce 'IPHONEOS_DEPLOYMENT_TARGET=${SDK_MIN} TVOS_DEPLOYMENT_TARGET=15.0 \'
 [ "$(grep -cF -- '--enable-zvbi' "$script")" = 0 ] || { echo "error: zvbi still enabled" >&2; exit 1; }
 
-echo "Building TVVLCKit $VERSION without zvbi; log in $LOG"
-./buildMobileVLCKit.sh -vft > "$LOG" 2>&1 || { echo "error: build failed; see $LOG" >&2; tail -30 "$LOG" >&2; exit 1; }
+echo "Building $KIT $VERSION without zvbi; log in $LOG"
+./buildMobileVLCKit.sh $FLAGS > "$LOG" 2>&1 || { echo "error: build failed; see $LOG" >&2; tail -30 "$LOG" >&2; exit 1; }
 
-out="$WORK/build/TVVLCKit.xcframework"
+out="$WORK/build/$KIT.xcframework"
 [ -d "$out" ] || { echo "error: $out was not produced" >&2; exit 1; }
 
 # Check every slice: no zvbi code, and VLC's own LGPL Teletext decoder is still there.
-for bin in "$out"/*/TVVLCKit.framework/TVVLCKit; do
+for bin in "$out"/*/$KIT.framework/$KIT; do
     if nm "$bin" | awk '{print $NF}' | grep -q -E '^_vbi_|vlc_entry__codec_libzvbi'; then
         echo "error: zvbi symbols remain in $bin" >&2
         exit 1
@@ -91,8 +103,8 @@ for bin in "$out"/*/TVVLCKit.framework/TVVLCKit; do
     nm "$bin" | grep -q vlc_entry__codec_telx || { echo "error: telx decoder missing from $bin" >&2; exit 1; }
 done
 
-rm -rf "$VENDOR/TVVLCKit.xcframework" "$VENDOR"/.TVVLCKit-*
+rm -rf "$VENDOR/$KIT.xcframework" "$VENDOR/.$KIT-"*
 cp -R "$out" "$VENDOR/"
-cp COPYING "$VENDOR/TVVLCKit-COPYING.txt"
-touch "$VENDOR/.TVVLCKit-$VERSION-nozvbi"
-echo "TVVLCKit $VERSION without zvbi installed in Vendor/"
+cp COPYING "$VENDOR/$KIT-COPYING.txt"
+touch "$VENDOR/.$KIT-$VERSION-nozvbi"
+echo "$KIT $VERSION without zvbi installed in Vendor/"

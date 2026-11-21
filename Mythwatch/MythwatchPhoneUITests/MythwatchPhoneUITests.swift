@@ -112,7 +112,14 @@ final class MythwatchPhoneUITests: XCTestCase {
         for _ in 0..<6 where !licences.isHittable { app.swipeUp() }
         licences.tap()
         XCTAssertTrue(app.scrollViews["licences.screen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "GNU Lesser General Public License")).firstMatch.exists)
+        func shows(_ text: String) -> Bool {
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists
+        }
+        XCTAssertTrue(shows("MobileVLCKit 3.7.4"))
+        XCTAssertTrue(shows("GNU Lesser General Public License"))
+        let notices = app.scrollViews["licences.screen"]
+        for _ in 0..<6 where !shows("libzvbi is left out") { notices.swipeUp() }
+        XCTAssertTrue(shows("libzvbi is left out"), "M6-6: the iPhone build leaves zvbi out too")
     }
 
     func testAnEmptyLibrarySaysSo() {

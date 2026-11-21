@@ -13,9 +13,9 @@ streams (section 4).
 | | |
 | --- | --- |
 | tvOS | **TVVLCKit 3.7.4 built from source without libzvbi** (`Tools/build-vlckit.sh`, since 2026-11-17), libVLC **3.0.24** "Vetinari" (VLC commit `6de05adc` plus VLCKit's 42 patches, as in VideoLAN's build). Until then: VideoLAN's CocoaPods binary (changeset `3.0.24-42-g94bb4bd0e6`) |
-| iOS (later iPhone app) | **MobileVLCKit 3.7.4**, the same VLCKit version from the same publisher |
+| iOS (iPhone app, M6) | **MobileVLCKit 3.7.4 built from source without libzvbi** (`Tools/build-vlckit.sh ios`, since 2026-11-21), the same sources as tvOS. Until then: VideoLAN's CocoaPods binary below |
 | tvOS archive (no longer used) | `https://download.videolan.org/cocoapods/prod/TVVLCKit-3.0-20260930-0854.tar.xz`, SHA-256 `07892cae8e59e95a23f1fcf11692f802eae106312aa5ad9782faa2556b2d65d5` |
-| iOS archive | `https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-3.0-20260922-1512.tar.xz`, SHA-256 `c649c4c47bd065b3a5511746361b5a9066a34033f2df9cbc9454409c0f363b52` |
+| iOS archive (no longer used) | `https://download.videolan.org/pub/cocoapods/prod/MobileVLCKit-3.0-20260922-1512.tar.xz`, SHA-256 `c649c4c47bd065b3a5511746361b5a9066a34033f2df9cbc9454409c0f363b52` |
 | Source | `https://code.videolan.org/videolan/VLCKit` (tag `3.7.4`); libVLC `https://code.videolan.org/videolan/vlc` (branch `3.0.x`) |
 | Licence | LGPL 2.1 or later (`COPYING.txt` in the archive) |
 
@@ -32,8 +32,15 @@ VLCKit's scripts break on paths with spaces. On an 18-core Mac a clean build tak
 minutes. The script fails unless every slice has no zvbi symbol and still has VLC's `telx`
 module. Compared with VideoLAN's binary, the device slice lacks exactly one module
 (`codec_libzvbi`, 238 of 239) and exports the same 367 `libvlc_*` and `VLC*` class symbols.
-Run `Tools/build-vlckit.sh` once after cloning. `Tools/fetch-vlckit.sh` now fetches only
-VideoLAN's prebuilt MobileVLCKit for the later iPhone app, which still contains zvbi. To change
+Run `Tools/build-vlckit.sh` once after cloning, and `Tools/build-vlckit.sh ios` for the iPhone
+app. **iOS (M6-6, 2026-11-21):** the same script and work tree, `buildMobileVLCKit.sh -vf`, with
+the same zvbi changes and the script's iOS minimum raised from 9.0 to 15.0. VLCKit builds arm64
+only for devices by default, so there are no armv7 slices to strip; the simulator slice is arm64
+and x86_64. About 7.5 minutes on the same Mac after the tvOS build had built the shared tools.
+Compared with VideoLAN's MobileVLCKit (kept at `build/MobileVLCKit-prebuilt-3.7.4.xcframework`,
+git-ignored): 241 modules against 242, the missing one `codec_libzvbi`; `cc` and `telx` present;
+the same 373 `libvlc_*` and `VLC*` class symbols; no `vbi_` symbol in either slice (VideoLAN's has
+154); minimum iOS 15.0. `Tools/fetch-vlckit.sh`, which fetched VideoLAN's binary, was removed. To change
 the version, update the tag and commit in `build-vlckit.sh`, and this file and
 `THIRD_PARTY_NOTICES.md`, in the same commit.
 

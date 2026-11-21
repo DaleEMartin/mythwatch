@@ -34,6 +34,8 @@ Tools/check-deps.sh                                # dependency rule (SPEC §2);
 MYTHWATCH_LIVE_BACKEND=http://host:6544 swift test --filter Live    # read-only live tests
 xcodebuild -project Mythwatch/Mythwatch.xcodeproj -scheme Mythwatch \
   -destination 'platform=tvOS Simulator,name=Apple TV' test          # app build + UI tests
+xcodebuild -project Mythwatch/Mythwatch.xcodeproj -scheme MythwatchPhone \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test      # iPhone app (SPEC 11)
 ```
 
 ## Reference material

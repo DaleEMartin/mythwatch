@@ -5,27 +5,28 @@ software, which keeps its own licence.
 
 ## VLCKit / libVLC
 
-- **What:** TVVLCKit 3.7.4 (tvOS), MobileVLCKit 3.7.4 for the later iPhone app. Objective-C
+- **What:** TVVLCKit 3.7.4 (tvOS) and MobileVLCKit 3.7.4 (iPhone and iPad). Objective-C
   wrapper around libVLC 3.0.24, by VideoLAN and the VLCKit authors.
 - **Licence:** GNU Lesser General Public License, version 2.1 or later (full text below).
 - **How it is used:** as a separate dynamically linked framework embedded in the app bundle
-  (`Mythwatch.app/Frameworks/TVVLCKit.framework`). You may replace it with your own build of the
-  same version.
+  (`Mythwatch.app/Frameworks/TVVLCKit.framework`, or `MobileVLCKit.framework` in the iPhone
+  app). You may replace it with your own build of the same version.
 - **Binary:** built from source by `Tools/build-vlckit.sh` in this repository, which runs
-  VideoLAN's own build script (`buildMobileVLCKit.sh -vft`) with two changes: libzvbi is left out
-  (`--disable-zvbi`), and the minimum tvOS version is 15.0. VLCKit's source code is not changed.
+  VideoLAN's own build script (`buildMobileVLCKit.sh -vft` for tvOS, `-vf` for iOS) with two
+  changes: libzvbi is left out (`--disable-zvbi`), and the minimum tvOS or iOS version is 15.0.
+  VLCKit's source code is not changed.
 - **Source:** VLCKit `https://code.videolan.org/videolan/VLCKit` (tag `3.7.4`, commit
   `54bba6d95502d0f3f7a9da581727935b21d55fb2`); libVLC `https://code.videolan.org/videolan/vlc`
   (`3.0.x` branch, commit `6de05adc`, 3.0.24) with the patches in VLCKit's `libvlc/patches`. The
   libraries VLCKit bundles (FFmpeg and others) are built from VLC's `contrib` tree in the same
   source.
 
-libzvbi, which VideoLAN's own TVVLCKit build includes and which has a GPL-2-only part, is **not**
-in this build.
+libzvbi, which VideoLAN's own TVVLCKit and MobileVLCKit builds include and which has a GPL-2-only
+part, is **not** in these builds.
 
 ## Other libraries inside VLCKit
 
-These are built into the TVVLCKit binary from VLC's `contrib` tree (source as above). Each
+These are built into the TVVLCKit and MobileVLCKit binaries from VLC's `contrib` tree (source as above). Each
 keeps its own licence, as its project publishes it; the licences were not checked file by file.
 
 | Library | Licence |

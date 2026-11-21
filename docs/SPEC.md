@@ -1495,9 +1495,10 @@ The pinned build is **TVVLCKit 3.7.4**, libVLC 3.0.24, **built from source witho
 (owner, 2026-11-17: VideoLAN's binary carries zvbi's GPL-2-only code; `docs/VLCKIT.md` §1-2).
 `Tools/build-vlckit.sh` builds it and installs it into the git-ignored `Vendor/`; the project
 embeds `Vendor/TVVLCKit.xcframework`. Run the script once after cloning, before building the app.
-Do not go back to a prebuilt TVVLCKit that contains zvbi. `Tools/fetch-vlckit.sh` fetches
-VideoLAN's prebuilt MobileVLCKit 3.7.4 for the iPhone app (M6); it still contains zvbi and must be
-built the same way before an iPhone release.
+Do not go back to a prebuilt TVVLCKit that contains zvbi. The iPhone app (§11) embeds
+`Vendor/MobileVLCKit.xcframework`, built the same way by `Tools/build-vlckit.sh ios` (M6-6,
+2026-11-21: arm64 only, iOS 15.0 minimum); VideoLAN's prebuilt MobileVLCKit, which carries zvbi,
+is no longer fetched (`Tools/fetch-vlckit.sh` was removed).
 
 `Info.plist` additions: `NSAppTransportSecurity > NSAllowsLocalNetworking = true`,
 `NSLocalNetworkUsageDescription`, `NSBonjourServices = ["_mythbackend._tcp"]`.
@@ -1764,7 +1765,7 @@ both targets: the composition root, `VLCPlayerEngine`, `NowPlaying`, `Labels`, `
 screens stay per platform. `VLCPlayerEngine` picks `TVVLCKit` or `MobileVLCKit` with `#if os(tvOS)`.
 *Why not a package target for the engine* (what this section said before): VLCKit is fetched or
 built into the git-ignored `Vendor/`, so a package `binaryTarget` pointing at it would make
-`swift test` fail in CI and on any clone that has not run `Tools/fetch-vlckit.sh`, and the
+`swift test` fail in CI and on any clone that has not run `Tools/build-vlckit.sh`, and the
 package would no longer be "no VLCKit" (§2). A shared app folder keeps the package untouched.
 The iOS app uses the same bundle id as the tvOS app, `com.daleemartin.Mythwatch` (one App Store
 record, universal purchase; planner's default, to confirm with the owner).

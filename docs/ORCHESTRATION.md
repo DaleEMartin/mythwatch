@@ -327,6 +327,20 @@ this note is the full handoff. Update the "Status" section as work proceeds.
   and dialog buttons twice to XCUITest; the tests take `firstMatch`. Not checked: real VLC
   playback on an iPhone (simulator played only the fakes in this task; M0-3 did play a real
   stream in an iOS simulator), rotation, iPad layout.
+- **M6-6 done and committed** (2026-11-21, same session): `Tools/build-vlckit.sh ios` builds
+  MobileVLCKit 3.7.4 without zvbi (7.5 min; arm64 device, arm64 + x86_64 simulator, iOS 15.0
+  minimum, 241 of VideoLAN's 242 modules, same 373 API symbols, no `vbi_`). `fetch-vlckit.sh`
+  removed; VideoLAN's binary kept for comparison at `build/MobileVLCKit-prebuilt-3.7.4.xcframework`.
+  Notices name both frameworks; the phone licences test checks MobileVLCKit and "libzvbi is left
+  out"; the tvOS licences test still passes. All 11 phone UI tests pass on the new build. README
+  and CLAUDE.md list the phone scheme. **After cloning, run both `Tools/build-vlckit.sh` and
+  `Tools/build-vlckit.sh ios`.** Not checked: real playback with this build (the UI tests use the
+  fakes; playing a live recording would POST its position, rule 4).
+- **M6-5 needs the owner** (2026-11-21): `NowPlaying` is shared and the phone player attaches it,
+  but M6-2 pauses on `.background` and the app has no background-audio mode, so lock-screen
+  controls can only show a paused item. Question for the owner: keep playing audio when the phone
+  locks (needs `UIBackgroundModes` audio and `leftForeground()` only on a real suspension), or
+  pause as now?
 - **Backend commercial detection** (owner, 2026-11-16, authorised changing backend settings):
   global `CommercialSkipMethod` is 7 (All, v1 detector) with `AggressiveCommDetect` 1. Channel
   WBTS-CD 15_1 (chanid 16859) set from CommMethod -1 to **261** (Experimental: logo + blank) through

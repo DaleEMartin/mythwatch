@@ -16,6 +16,10 @@ state.
 - Finds the backend on your network by Bonjour, or you can type its address.
 - VoiceOver labels, Reduce Motion and large text are supported.
 
+An iPhone and iPad version is being built in the same project (the **MythwatchPhone** scheme;
+`docs/TASKS.md` Milestone 6). It has the same screens and player, laid out for touch, and has not
+yet been tried on a real iPhone.
+
 ## Requirements
 
 - An Apple TV running **tvOS 26** or later.
@@ -47,6 +51,7 @@ VLCKit is not kept in git. Build it once after cloning; the script builds VideoL
 
 ```
 Tools/build-vlckit.sh            # tvOS framework into Vendor/
+Tools/build-vlckit.sh ios        # iOS framework, for the iPhone app
 ```
 
 Then open `Mythwatch/Mythwatch.xcodeproj`, choose the **Mythwatch** scheme, and run it on the
@@ -63,6 +68,8 @@ cd MythwatchKit && swift test --filter <Name>      # one suite or test
 Tools/check-deps.sh                                # the dependency rule between targets
 xcodebuild -project Mythwatch/Mythwatch.xcodeproj -scheme Mythwatch \
   -destination 'platform=tvOS Simulator,name=Apple TV' test          # app build and UI tests
+xcodebuild -project Mythwatch/Mythwatch.xcodeproj -scheme MythwatchPhone \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test      # the iPhone app
 ```
 
 Package tests use fakes and recorded fixtures only: no network, no real clock. The UI tests run
